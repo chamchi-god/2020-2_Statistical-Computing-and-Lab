@@ -1,0 +1,375 @@
+---
+title: "326.212 Homework 2"
+author: "DongWon Kim"
+output: html_document
+---
+
+## 2020-13483 
+```{r}
+library("tidyverse")
+library("nycflights13")
+```
+
+### Textbook 5.2.4
+
+#### Problem 1.
+Find all flights that
+
+1.Had an arrival delay of two or more hours
+2.Flew to Houston (IAH or HOU)
+3.Were operated by United, American, or Delta
+4.Departed in summer (July, August, and September)
+5.Arrived more than two hours late, but didn’t leave late
+6.Were delayed by at least an hour, but made up over 30 minutes in flight
+7.Departed between midnight and 6am (inclusive)
+```{r}
+filter(flights, arr_delay>=120) 
+filter(flights, dest=="IAH" | dest == "HOU" )
+airlines # 항공사들의 이름
+filter(flights, carrier == "UA" |carrier == "AA" |carrier == "DL" )
+filter(flights, month == 7|month == 8|month == 9)
+filter(flights, arr_delay>120 & dep_delay <=0 )
+filter(flights, dep_delay>=60  & dep_delay -  arr_delay > 30 )
+filter(flights, dep_time <=600| dep_time==2400  )
+```
+
+
+#### Problem 3. How many flights have a missing dep_time? What other variables are missing? What might these rows represent?
+
+```{r}
+filter(flights, is.na(dep_time)) 
+```
+
+8255개의 비행기에서 `dep_time`이 누락되었다. 이 뿐만 아니라 `dep_delay`, `arr_time`, `arr_delay`, `air_time`이 누락된 것을 확인할 수 있었다. 아마 이 비행기들은 비행이 취소된 비행기 일 것이다.
+
+
+### Textbook 5.3.1 How could you use arrange() to sort all missing values to the start? (Hint: use is.na()).
+
+#### Problem 1.
+```{r}
+df <- tibble(x = c(5, 2, NA))
+arrange(df, x)
+arrange(df, desc(is.na(x)))
+
+```
+
+예시로 `df <- tibble(x = c(5, 2, NA))` 이용해볼 것이다. 첫번째 처럼 desc를 써주지 않으면 2부터 시작함을 알 수 있다. 우리가 원하는 것은 `NA`가 가장 앞에 오는 것이므로 desc()와 is.na()를 활용해주면 된다. 이렇게 되면 `NA`가 가장 앞에 정렬됨을 확인할 수 있다.
+
+
+### Textbook 5.4.1
+
+#### Problem 4. Does the result of running the following code surprise you? How do the select helpers deal with case by default? How can you change that default?
+```{r}
+select(flights, contains("TIME"))
+select(flights, contains("TIME", ignore.case = FALSE))
+```
+
+분명 `contains("TIME")`은 대문자인데 대문자/소문자 관계없이 문자 'time'이 열 이름에 들어가있으면 그 열들을 다 `select`해서 아주 조금 놀랐다. `?contains` 결과 'ignore.case = FALSE`하면 디폴트를 변경할 수 있다는 것을 알 수 있었다.
+
+### Textbook 5.5.2
+
+#### Problem 1.Currently dep_time and sched_dep_time are convenient to look at, but hard to compute with because they’re not really continuous numbers. Convert them to a more convenient representation of number of minutes since midnight.
+```{r}
+a<-select(flights, dep_time,sched_dep_time)
+mutate(a, new_dep_time =((a$dep_time%/%100)*60+a$dep_time%%100)%%1440,
+       sched_new_dep_time=((a$sched_dep_time%/%100)*60+a$sched_dep_time%%100)%%1440)
+
+
+
+```
+
+덧붙이자면, flights에서 midnight는 2400으로 표시되며, 이를 분으로 고쳐주면 1440이다. 문제에 따르면 이 값은 0이 되어야한다. 그러므로 구한 식에 `%%1440`을 해주어야지 문제 조건을 만족시킬 수 있다.
+
+#### Problem 3.Compare dep_time, sched_dep_time, and dep_delay. How would you expect those three numbers to be related?
+```{r}
+b<-select(flights, dep_time,sched_dep_time,dep_delay )
+mutate(b,new_dep_time =((b$dep_time%/%100)*60+b$dep_time%%100)%%1440,
+sched_new_dep_time=((b$sched_dep_time%/%100)*60+b$sched_dep_time%%100)%%1440,
+new_dep_delay = new_dep_time-sched_new_dep_time)
+```
+
+열의 이름에서  `dep_time - sche_dep__time = dep_delay`임을 유추할 수 있는데, 정확한 계산을 위해서는 1번 문제를 활용해야한다. 1번 문제를 통해 출발 시각과 예정 출발 시각을 자정에서 몇 분 지났는가로 고쳐준 다음에 이 둘을 빼주면 원래 flights에서 `dep_delay`와 같은 값을 같은 것을 확인할 수 있었다. 고쳐주는 이유는 원래 `flights`에서는 보기 편한 상태로 출발시각과 예정된 출발시각을 나타냈기 때문이다.
+
+### Textbook 5.6.7
+
+#### Problem 5.Which carrier has the worst delays? Challenge: can you disentangle the effects of bad airports vs. bad carriers? Why/why not? (Hint: think about flights %>% group_by(carrier, dest) %>% summarise(n())
+
+```{r}
+flights %>% group_by(carrier) %>% summarise(delay=mean(arr_delay - dep_delay, na.rm = T))%>% arrange(desc(delay))
+airlines
+
+flights %>%
+  filter(!is.na(arr_delay - dep_delay))%>%
+  group_by(carrier, dest, origin) %>% summarise(fly_delay=sum(arr_delay - dep_delay), flights= n())%>% group_by(dest,origin)%>%
+  mutate(fly_delay_sum = sum(fly_delay), flights_sum= sum(flights))%>%
+  ungroup()%>%
+  mutate(fly_delay_fly= fly_delay/flights, rest_delay_fly= (fly_delay_sum)/(flights_sum), comp_fly_delay = fly_delay_fly - rest_delay_fly) %>%
+  group_by(carrier)%>%
+  summarise(final_delay_delay = mean(comp_fly_delay))
+```
+
+`carrier`만 놓고 보았을때 `F9`이라는 이름을 가진 Frontier Airlines Inc.이 가장 나쁜 지연을 보이고 있다.하지만 이러한 결과는 나쁜 공항에 의해 영향을 받았을수 있음을 생각해볼 수 있다. 완전히는 아니지만 공항과 `carrier`가 미치는  영향을 분리할 수 있을 것이며,  최대한 결과가 공항에 의한 영향을 덜 받도록 코드를 다시 짜볼 것이다.
+우선 나쁜공항에 의한 영향을 가장 간단히 최소화 시키는 방법은 동일한 루트에서 `carrier`들을 비교하는 것이다. 즉, 각 루트에서 각 `carrier`마다의 지연시간 평균과 각 루트에서 모든 `carrier` 지연시간 평균의 차를 비교해주면 보다 정확하게 가장 나쁜 지연을 보여주는 `carrier`를 찾을 수 있다고 생각한다. 이에 맞추어 코드를 짜본 결과 `OO`이라는 이름을 가진SkyWest Airlines Inc.이 가장 나쁜 지연을 보이고 있다.
+
+### Textbook 5.7.1
+
+#### Problem 5.Delays are typically temporally correlated: even once the problem that caused the initial delay has been resolved, later flights are delayed to allow earlier flights to leave. Using lag(), explore how the delay of a flight is related to the delay of the immediately preceding flight.
+```{r}
+really_late<-flights%>%
+  filter(!is.na(dep_delay))  %>% arrange(origin, year, month, day, dep_time)%>%group_by(origin) %>% mutate(new_lag = lag(dep_delay))%>%filter(!is.na(new_lag))
+
+really_late %>% group_by(new_lag)%>%summarise(new_delay = mean(dep_delay))%>%ggplot()+geom_point(mapping =aes(x= new_lag, y=new_delay) )
+
+
+````
+
+전 비행기의 지연이 뒤에 뜨는 비행기에 영향을 미치는지 알아보기위해 같은 `lag()`함수를 이용해 같은날 같은공항에서 출발하는 비행기들의 `dep_delay`를 한칸씩 내린다. 그리고 lag된 시간이 실제 지연된 시간과 관련을 갖는지 보기 위해 ggplot을 이용해 산점도를 그려본다. 그 결과 대부분의 비행기에서 전 비행기 지연 시간과 다음 비행기 지연된 시간이 비례하는 것을 볼 수 있었다. 또 전의 비행기가 아주 오래 지연되면 원래 그 시간에 출발하는 비행기가 출발하는 것을 볼 수 있었다.
+
+### Textbook 7.3.4
+
+#### Problem 2.Explore the distribution of price. Do you discover anything unusual or surprising? (Hint: Carefully think about the binwidth and make sure you try a wide range of values.)
+```{r}
+ggplot(data = diamonds) +
+  geom_histogram(mapping = aes(x = price), binwidth = 10)
+ggplot(data = filter(diamonds, price <3000)) +
+  geom_histogram(mapping = aes(x = price), binwidth = 1)
+
+```
+`binwidth` 를 10으로 한 결과 0~5000사이에 관측치가 존재하지 않는 곳이 있다는 특징이 있음을 확인할 수 있었다. 정확히 어디 구간인지 살펴보고자 `filter`를 활용했고, 이 관측치가 존재하지 않는 부분은 1500 근처임을 확인할 수 있었다.
+
+### Textbook 7.5.1.1
+
+#### Problem 1.Use what you’ve learned to improve the visualisation of the departure times of cancelled vs. non-cancelled flights.
+```{r}
+ggplot( data = mutate(flights, cancelled = is.na(dep_time), new_time= hour+ minute/60))+ 
+  geom_boxplot(mapping = aes(x = cancelled, y = new_time))
+```
+
+#### Problem 2.What variable in the diamonds dataset is most important for predicting the price of a diamond? How is that variable correlated with cut? Why does the combination of those two relationships lead to lower quality diamonds being more expensive?
+```{r}
+diamonds
+ggplot(data= diamonds)+
+  geom_point(mapping = aes(x=carat, y= price))
+ggplot(data= diamonds)+
+  geom_boxplot(mapping = aes(x=cut, y= price))
+ggplot(data= diamonds)+
+  geom_boxplot(mapping = aes(x=color, y= price))
+ggplot(data= diamonds)+
+  geom_boxplot(mapping = aes(x=clarity, y= price))
+ggplot(data= diamonds)+
+  geom_boxplot(mapping = aes(x=cut, y= carat))
+```
+그래프 비교 결과 `carat`이 다른 데이터셋들에 비해 가격과 더 뚜렷한 관계성을 갖는다는 것을 알 수 있었다. 즉, 다이아몬드의 무게가 무거울 수록 가격이 증가하는 것을 알 수 있다. `carat`과 `cut`의 관계를 살펴보면 `cut`의 품질이 좋아질수록 다이아의 무게가 감소한다는 약한 관계성을 찾을 수 있다. 이를 바탕으로 저품질의 다이아는 다이아의 크기가 크며 이는 높은 가격과 직결됨을 유추할 수 있다.
+
+### Textbook 7.5.2.1 
+
+#### Problem 2. Use geom_tile() together with dplyr to explore how average flight delays vary by destination and month of year. What makes the plot difficult to read? How could you improve it?
+```{r}
+flights%>%group_by(month,dest)%>%summarise(tile_delay= mean(dep_delay, na.rm = T))%>%ggplot(mapping= aes(x=month, y= dest))+geom_tile(mapping= aes(fill=tile_delay))#before
+
+flights%>%group_by(month,dest)%>%summarise(tile_delay= mean(dep_delay, na.rm = T))%>%ggplot(mapping= aes(x=month, y= dest), width = 1)+geom_tile(mapping= aes(fill=tile_delay)) +scale_fill_gradient(low = "white", high = "black")#after
+```
+
+`dest`가 매우 많은 반면에 색상간의 차이가 크지 않아 뚜렷하게 구분되지 않아 읽기 어렵다. `scale_fill_gradient`를 이용해서 보다 색변화를 주려한다. 그리고 달 구분도 헷갈렸는데 `ggplot`에 `width = 1`을 넣어 보다 보기 쉽게 만들었다.
+
+### Textbook 7.5.3.1
+
+#### Problem 5.Two dimensional plots reveal outliers that are not visible in one dimensional plots. For example, some points in the plot below have an unusual combination of x and y values, which makes the points outliers even though their x and y values appear normal when examined separately. Why is a scatterplot a better display than a binned plot for this case?
+
+```{r}
+ggplot(data = diamonds) +
+  geom_point(mapping = aes(x = x, y = y)) +
+  coord_cartesian(xlim = c(4, 11), ylim = c(4, 11))
+ggplot(data = diamonds) +
+  geom_bin2d(mapping = aes(x = x, y = y))+
+coord_cartesian(xlim = c(4, 11), ylim = c(4, 11))
+```
+
+binned plot의 경우 연속형 변수가 범주형 변수처럼 작동하는 모습이 나타나고, 이에 어떤 bin 범위에서 1개만 value가 존재하더라도 그 부분이 다 색이 칠해지므로 이상점이 나타나는 것을 scatterplot에서보다 확인하기 어렵다.  
+
+### Textbook 10.5
+
+#### Problem 4.Practice referring to non-syntactic names in the following data frame by: Extracting the variable called 1. Plotting a scatterplot of 1 vs 2. Creating a new column called 3 which is 2 divided by 1. Renaming the columns to one, two and three.
+```{r}
+annoying <- tibble(
+  `1` = 1:10,
+  `2` = `1` * 2 + rnorm(length(`1`))
+)
+annoying$`1` # Q.1
+ggplot(data=annoying)+
+  geom_point(mapping=aes(x=`1`,y=`2`)) # Q.2
+mutate(annoying, `3` = `2` / `1`)#Q.3
+mutate(annoying, `3` = `2` / `1`)%>%rename( one=`1`, two=`2`,three=`3`)#Q.4
+```
+
+
+### Textbook 11.2.2
+
+#### Problem 5.Identify what is wrong with each of the following inline CSV files. What happens when you run the code?
+
+```{r}
+read_csv("a,b\n1,2,3\n4,5,6")
+read_csv("a,b,c\n1,2\n1,2,3,4")
+read_csv("a,b\n\"1")
+read_csv("a,b\n1,2\na,b")
+read_csv("a;b\n1;3")
+```
+
+첫번째 코드는 가장 첫째 줄인 열의 이름이 2개 밖에 없다. 이와달리 value는 열이 3개가 필요하다. 그래서 코드를 실행하면 3과 6이 담기지 않는다.
+
+두번째 코드는 가장 첫째 줄인 열의 이름이 3개이지만 value는 윗 행이 2개 아래 행이 4개다. 그래서 코드를 실행하면 윗행에서 value하나가 NA로 나타나고, 아래행에서는 4가 담기지 못한다.
+
+세번째 코드는 `"`가 완성된 형태가 아니다. 그래서 코드를 실행하면 1앞의 `"`는 사라지고 1만 남으며, b열의 value는 NA가 된다.
+
+네번째 코드는 두번째 행의 a,b는 문자다. 그래서 코드를 실행하면 두번째 행으로 인해 1,2가 있음에도 전체 열이 문자열로 강제된다.
+
+다섯번째 코드는 `read_csv()`에서는 `,`를 써야지 구분이 되는데 `;`를 써버렸다. 그래서 코드를 실행하면 `a;b`,`1;3`이 한 묶음으로 나온다.
+
+### Textbook 11.3.5
+
+#### Problem 4.If you live outside the US, create a new locale object that encapsulates the settings for the types of file you read most commonly.
+```{r}
+kor_locale<-locale(date_names= "ko",date_format = "%Y/%m/%d ", time_format = "%p %I:%M:%S")
+```
+
+대한민국은 날짜는 2020/10/13일 꼴로 쓰고, 시간 포맷은 오후 11:59:59로 쓴다.
+
+#### Problem 7.Generate the correct format string to parse each of the following dates and times:
+```{r}
+d1 <- "January 1, 2010"
+d2 <- "2015-Mar-07"
+d3 <- "06-Jun-2017"
+d4 <- c("August 19 (2015)", "July 1 (2015)")
+d5 <- "12/30/14" # Dec 30, 2014
+t1 <- "1705"
+t2 <- "11:15:10.12 PM"
+parse_date(d1, "%B %d, %Y")
+parse_date(d2, "%Y- %b -%d")
+parse_date(d3, "%d- %b -%Y")
+parse_date(d4, "%B %d (%Y)")
+parse_date(d5, "%m/%d/%y")
+parse_time(t1, "%H%M")
+parse_time(t2, "%I:%M:%OS %p")
+```
+
+
+### Extra Questions
+
+#### Problem 1.a
+```{r}
+
+library("quantmod")
+
+options("getSymbols.warning4.0"=FALSE) # to suppress warnings 
+samsung <- getSymbols("005930.KS", auto.assign=FALSE)  # KOSPI tick number is 005930
+head(samsung)
+plot(samsung$`005930.KS.Close`)
+
+new_samsung<-as_tibble(samsung, rownames=NA)
+new_date<-as.Date(rownames(new_samsung),"%Y-%m-%d")
+mutate(new_samsung, date = new_date )%>%ggplot()+
+  geom_line(mapping = aes(x=date, y=`005930.KS.Close`))
+```
+
+`rownames=NA`를 이용해 tibble 과정에서 사라지는 행 이름을 보존하고 `as.date`를 가지고 단지 행 이름뿐이었던 것들을 날짜취급하게 만든다. 그리고 이것들을 새롭게 열에 추가해준다. 그 뒤는 `ggplot`을 이용해 x축에는 새로 만든 `date`, y축에는 주가가 오게 그래프를 그려내면 된다.
+
+#### Problem 1.b
+
+```{r}
+library(quantmod)
+getFX('USD/KRW', from = Sys.Date() - 179, to = Sys.Date())
+getFX('JPY/KRW', from = Sys.Date() - 179, to = Sys.Date())
+
+new_usdkrw<-as.tibble(USDKRW, rownames = NA)
+new_date2<-as.Date(rownames(new_usdkrw),"%Y-%m-%d")
+new_usdkrw2<-mutate(new_usdkrw, date1 =new_date2) #원달러 자료 tibble 이후 date1 열 생성 
+
+new_jpykrw<-as.tibble(JPYKRW, rownames = NA)
+new_date3<-as.Date(rownames(new_jpykrw),"%Y-%m-%d")
+new_jpykrw2<-mutate(new_jpykrw, date2 =new_date3) #원엔 자료 tibble 이후 date2 열 생성 
+
+n_s<-mutate(new_samsung, date = new_date)%>%filter(date %in% new_usdkrw2$date1) # 주식시장 자료 중 원/달러 자료(원/엔화자료)가 있는 날짜만 뽑아냄(시스템 날짜로부터 180일 이내일 것임)
+
+n_u<-new_usdkrw2%>%filter(date1 %in% n_s$date  ) #원/달러 자료 중 주식시장이 열리는 날만 뽑아냄
+
+n_j<-new_jpykrw2%>%filter(date2 %in% n_s$date  ) #원/엔화 자료 중 주식시장이 열리는 날만 뽑아냄
+
+U<-as.numeric(USDKRW[1,])
+J<-as.numeric(JPYKRW[1,])
+n_s%>%mutate(samsung_usd= n_s$`005930.KS.Close`/n_u$USD.KRW, samsung_jpy =
+n_s$`005930.KS.Close`/n_j$JPY.KRW)%>%ggplot()+geom_line(mapping = aes(x=date, y=`005930.KS.Close`))+geom_line(mapping = aes(x=date, y=`samsung_usd`*U), color = "blue")+geom_line(mapping = aes(x=date, y=`samsung_jpy`*J), color = "red")+labs(title="초기값을 같게한 통화 별 삼성의 주가", subtitle = "검정:원, 파랑:달러, 빨강: 엔 ",
+        x ="Date", y = "주가") # after normalize
+```
+
+먼저, `getFX`를 활용해 최근 180일 이내의 원/달려자료와 원/엔자료를 다운받는다. 그리고 이를 활용해 삼성의 주가를 원화에서 달러와 엔으로 나타내고자하는데, 여기서 문제점은 주식시장은 매일같이 열리는 것이 아니라 주말, 공휴일 등은 쉬므로 원/달러, 원/엔 자료와 주식 자료에서 열의 순서가 같아도 날짜가 다르다는 문제가 발생한다. 이 상태에서 계산이 이루어진다면  오류가 발생할 것이다. 그러므로 세 자료 모두에서 행 순서에 따른 날짜를 동일하게 만들어주는 과정이 필요하다. 나의 경우 `tibble()`을 이용해 환율자료를 정리하고 1.a 문제처럼 사라진 날짜열을 새로 만들어준다. 이제 주식 자료에서 환율자료와 겹치는 날짜만을 뽑아내야하는데 이 때 `filter()` 와 `%in%`을 이용할 수 있었다. 이 과정을 거치면서 주식자료와 환율자료의 date는 같아진다. 이제 세 자료 모두에서 행 순서에 따른 날짜가 모두 같아졌으므로 계산을 진행해주면 된다. 삼성의 종가(원)에 각각 원/달러 환율과 원/엔 환율을 나눠줌으로서 달러로 나타낸 삼성의 종가와 엔으로 나타낸 삼성의 종가를 얻을 수 있다. 세 개의 시계열 그래프를 나타낸 결과 통화의 가치 차이로 인해 좋지 않은 그래프가 나온다. 그러므로 달러, 엔으로 나타낸 주가에 각각 자료 첫 날의 원/달러 환율과 원/엔 환율을 곱해줌으로서 초기값을 같게 만들어 준다. 그러면 첫 지점이 같은 세 그래프가 그려진다.
+
+
+#### Problem 2.
+```{r}
+
+library(tidyverse)
+seoul2019<-read_csv("etc/seoulpopdata.csv")[c(3:27),] #a 25행 10열의 tibble
+
+a<-seoul2019[,c(3:10)]
+b<-parse_character(seoul2019$`<c7><e0><U+0064><U+00B1><U+00B8><U+00BF><U+00AA><U+00BA><U+00B0>(<U+003E><U+00B8><U+9D7F>)`,locale = locale(encoding = "EUC-KR"))
+seoul2019tidy<-cbind(b,a);names(seoul2019tidy)<- c("구","총인구","총인구_남자(명)", "총인구_여자(명)","총인구_성비","내국인(명)","내국인_남자(명)","내국인_여자(명)","내국인_성비") #b
+
+a1<-parse_number(seoul2019tidy$"총인구")
+a2<-parse_number(seoul2019tidy$"총인구_남자(명)")
+a3<-parse_number(seoul2019tidy$"총인구_여자(명)")
+a4<-parse_number(seoul2019tidy$"총인구_성비")
+a5<-parse_number(seoul2019tidy$"내국인(명)")
+a6<-parse_number(seoul2019tidy$"내국인_남자(명)")
+a7<-parse_number(seoul2019tidy$"내국인_여자(명)")
+a8<-parse_number(seoul2019tidy$"내국인_성비")
+d<-tibble(
+        "구" = b,
+        "총인구" = a1,
+        "총인구_남자(명)" = a2,
+        "총인구_여자(명)" = a3,
+        "총인구_성비" = a4,
+        "내국인(명)" = a5,
+        "내국인_남자(명)" = a6,
+        "내국인_여자(명)" = a7,
+        "내국인_성비" = a8) #c
+
+pops<-d$총인구
+hist(pops, freq= F, ylim = c(0,0.0000033), ylab = "Density")
+ hist(rnorm(25,  mean(pops),sd(pops)),freq= F, ylim = c(0,0.0000033), ylab = "Density") #d
+ 
+ e<-sample(pops, size = 10, replace = T); f<-sample(pops, size = 10, replace = T)
+ mean(e);mean(pops); mean(f);mean(e) #e
+ 
+ mean(replicate(100,mean(sample(pops, size = 10, replace = T))))
+mean(replicate(1000,mean(sample(pops, size = 10, replace = T))))
+mean(replicate(10000,mean(sample(pops, size = 10, replace = T)))) #f
+
+mean(sample(pops, size = 25, replace = T)); mean(sample(pops, size = 25, replace = T)); mean(pops)
+mean(sample(pops, size = 100, replace = T)); mean(sample(pops, size = 100, replace = T)); mean(pops) #g
+ 
+hist(replicate(10000,mean(sample(pops, size = 10, replace = T))), freq = F)
+hist(replicate(10000,mean(sample(pops, size = 25, replace = T))), freq = F)
+hist(replicate(10000,mean(sample(pops, size = 100, replace = T))), freq = F)#h
+
+quantile(replicate(10000,mean(sample(pops, size = 10, replace = T))), probs=seq(0, 1,0.025))#i
+
+```
+ 
+ 
+ (a) `read_csv`를 이용해 2019년 서울시 인구데이터를 불러왔고(tibble의 형태이다), 25행 10열만 추출하고자하는데, 문제 의도상 25행의 의미는 서울의 25가지 구를 의미한다 생각된다. 그러므로 각 구의 인구만 추출하고자 `[c(3,27),]`을 사용하였다.
+ 
+ (b) 우선 untidy한 부분은 행의 이름이 제대로 인식이 안된다는 것인데 이 경우에는 `parse_character`와`locale = locale(encoding = "EUC-KR")`을 이용해 원래 데이터에서 나타나는 행의 이름 형태로 바꾸어줘야한다. 그리고 원래 tibble에서 2열은 그다지 쓸모있는 것이 아니기에 날려준다. 또 열의 이름도 데이터들이 나타내는 바를 제대로 표현하고 있지 못해 untidy한 부분인데 원래 tibbble에서 3열~10열만 추출한 후 `locale`을 통해 "구" 이름으로 바뀐 열이랑 묶어준 뒤 원래 tibble 에서 3~10열의 이름도 원래 데이터 형태로 바꿔준다. 
+ 
+ (c) 콤마로 인해 숫자들이 문자취급을 받고있는데, 콤마를 삭제해주어 숫자취급을 받도록 하고자 한다.`parse_number()`를 활용해 각 열마다 콤마를 삭제해줘 숫자취급을 받도록 해준다. 그리고 이 벡터들을 `tibble`로 다시 묶어준다.
+ 
+ (d) 우선 `pops`에 각 구마다 총 인구값을 벡터로 저장하고 이를 히스토그램으로 나타내준다. 그리고 이 벡터와 평균, 표준편차가 같은 정규분포에서 길이가 같도록 25개를 랜덤추출한다음에 히스토그램으로 나타내준다. 이 경우 아직까진 두 히스토그램의 모양이 비슷하다고 말하기는 어려운 상태이다.
+ 
+ (e) `pops`에서 10개씩 복원추출을 할 것인데 샘플들의 값은 랜덤하게 추출된다. 즉 값이 고정되어 있는 것이 아니기 때문에 평균은 달라진다. 한 번 더해봐도 마찬가지로 평균은 달라진다. 하지만 우연히 같은 값이 나올가능성은 있다.  
+ 
+ (f) `replicate()` 횟수가 많아질수록 표본평균의 평균이 모집단의 평균과 더 가까워지는 것을 볼 수 있었다. 이를 큰수의 법칙이라 부른다.
+ 
+ (g)  여기서는 sample size를 늘리고 있는데, 일반적으로 sample size가 커지면 추정량으로서의 표본평균의 표준오차는 줄어든다. 
+ 
+ (h) plot은 sample size가 커질수록 보다 표본평균의 분포는 평균과 분산이 모집단의 평균과 모집단의 분산/n인 정규분포에 근사한 모습을 나타낸다. 이를 중심극한정리라 한다.
+
+ (i) sample size가 10인 것들의 평균을 10000개 구한 것을 먼저 구한 뒤 이 값들의 분포(10000개 정도 구하면 정규분포와 큰 차이가 없을 것이라 생각한다.)에서 2.5%와 97.5% quantiles의 값을 구해보면 구간 2.5%와 97.5%사이에서 적어도 204885를 포함하지 않는다는 것을 안다. 그러므로 신뢰구간 95%에서 이 값이 서울 인구 모집단에서 추출되었다는 가설은 거짓이다. 
