@@ -1,0 +1,347 @@
+---
+title: "326.212 Homework 3"
+author: "Dongwon Kim"
+output: html_document
+---
+
+
+## 2020-13483 
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(lubridate)
+library(nycflights13)
+library(hms)
+```
+
+### Textbook 13.2.1
+
+#### Problem 1. Imagine you wanted to draw (approximately) the route each plane flies from its origin to its destination. What variables would you need? What tables would you need to combine?
+
+```{r}
+flights%>%
+  inner_join(select(airports, origin = faa, origin_lat = lat, origin_lon = lon),
+    by = "origin"
+  ) %>%inner_join(select(airports, dest = faa, dest_lat = lat, dest_lon = lon),
+    by = "dest"
+  )
+```
+
+우선 필요한 것은 각 비행기들의 출발지와 도착지, 그리고 각 공항의 위도와 경도가 있어야지만 각 비행기의 루트를 그릴 수 있을 것이다. 그러므로 루트를 그리기 위해서는 `flights`와 `airports` table을 합해야한다. `flights`에서 각 비행기의 출발지와 도착지 정보를 얻고, `airports`에서 각 출발지와 도착지의 위도와 경도를 얻으면 그릴 수 있을 것이다.
+
+### Textbook 13.3.1
+
+#### Problem 2 Identify the keys in the following datasets 
+
+1.Lahman::Batting,
+2.babynames::babynames
+3.nasaweather::atmos
+4.fueleconomy::vehicles
+5.ggplot2::diamonds
+(You might need to install some packages and read some documentation.)
+
+```{r}
+as.tibble(Lahman::Batting) %>%
+ count(playerID, yearID, stint) %>%
+ filter(n > 1) #1  answer: playerID, yearID, stint
+
+as.tibble(babynames::babynames) %>%
+ count(year, sex, name) %>%
+ filter(n > 1) #2 answer: year, sex, name
+
+as.tibble(nasaweather::atmos) %>%
+ count(lat, long, year, month) %>%
+ filter(n > 1) #3 answer: lat, long, year, month
+
+as.tibble(fueleconomy::vehicles) %>%
+ count(id) %>%
+ filter(n > 1)#4 answer:id
+
+as.tibble(ggplot2::diamonds)%>% distinct()
+nrow(ggplot2::diamonds) #5 일부 중복항이 존재해 key가 존재하지 않는다.(중복항이 존재해 다른 다이아몬드일지라도 구별할 수가 없다.)
+```
+
+
+### Textbook 13.4.6
+
+#### Problem 3 Is there a relationship between the age of a plane and its delays?
+```{r}
+age_data<-flights%>%
+  inner_join(select(planes, tailnum, plane_made = year), by = "tailnum")%>%
+  mutate(plane_age = year - plane_made)%>%
+  filter(!is.na(plane_age))%>%
+  select(tailnum,dep_delay,arr_delay,plane_age)%>%
+  group_by(plane_age)
+
+age_data%>% count()#비행기의 나이가 28년보다 많으면 표본이 1000개보다 적게됨.
+
+ age_data2<- age_data %>%summarise(age_dep_delay = mean(dep_delay, na.rm = TRUE), age_arr_delay = mean(arr_delay, na.rm = TRUE))
+  ggplot(age_data2)+geom_line(mapping = aes(x = plane_age, y = age_dep_delay)) #출발 지연
+  ggplot(age_data2)+geom_line(mapping = aes(x = plane_age, y = age_arr_delay)) #도착 지연
+
+```
+
+우선 각 비행기의 나이를 알기 위해 `inner_join`을 활용해 `planes` 테이블에서 각 비행기의 생산연도를 가져와 합쳐준다. 그리고 비행연도에서 생산연도를 빼주어 비행기의 나이를 구해준다. 그 뒤 비행기의 나이에 따라 묶었을 때 비행기의 나이가 28년보다 많으면 표본이 적어 여기에 해당하는 데이터들은 좋은 결과를 도출해내지 못할 것이기에 분석 대상에서 제외하고자한다. 일단 비행기의 나이에 따라 묶었을 때 출발 지연시간, 도착 지연시간의 평균을 구하고 이를 x축은 비행기의 나이, y축은 지연 시간으로 해서 그래프를 나타내본다. 그 결과 비행기의 나이가 10년차 까지는 나이가 많아질수록 출발 지연시간과 도착 지연시간이 늘어났다. 그러나 10년차 이상부터는 나이가 많아질수록 출발 지연시간과 도착 지연시간이 감소하는 모습을 볼 수 있었다.(25년차 이상부터는 표본이 적으므로 제외)
+
+### Textbook 13.5.1
+
+#### Problem 1 What does it mean for a flight to have a missing tailnum? What do the tail numbers that don’t have a matching record in planes have in common? (Hint: one variable explains ~90% of the problems.)
+```{r}
+flights%>%
+filter(is.na(tailnum), !is.na(dep_time)) %>%
+  nrow() #`tailnum`이 사라진 것은 비행이 취소 의미
+
+flights %>%
+  anti_join(planes, by = "tailnum") %>%
+  count(carrier)%>%
+ mutate(not_match_carrier = n / sum(n)) 
+
+```
+
+우선 `tailnum`이 사라진 것은 비행이 취소되었음을 의미한다. `planes` 테이블과 일치하지 않는 꼬리번호를 가진 기종의 공통점을 살펴볼 것인데. 일단 `anti_join`을 이용해  `planes` 테이블에 없는 `flights`의 기종들은 없애준다. 그러면 그 기종들의 `carrier`가 비교적 `AA`와`MQ`로 나타나는 것을 볼 수 있는데, 이를 정확히 알아보기 위해 `planes` 테이블에 없는 `flights`의 기종들 중  `AA`와`MQ`에 어느정도 속하는지 비율로 알아보면 약 90%넘게 속하는 것을 살펴볼 수 있다. 즉, `planes` 테이블과 일치하지 않는 꼬리번호를 가진 기종은 `AA`와`MQ`에 대부분 속한다는 공통점을 찾을 수  있었다.
+
+### Textbook 14.2.5
+
+#### Problem 2 In your own words, describe the difference between the sep and collapse arguments to str_c().
+
+sep은 인수들 사이에 입력할 문자열이며, collapse는 벡터를 하나의 문자열로 결합할 때 그 사이에 사용되는 추가적인 문자열이다.
+
+### Textbook 14.3.1.1
+
+#### Problem 1 Explain why each of these strings don’t match a \: "\", "\\", "\\\".
+
+우선 `\`는 다음 문자를 "escape"해줄 때 사용된다.
+
+`\\`는 기존`\`에 `\`가 앞에 하나 붙어 뒤의 문자`\`가 문자열 안으로 들어올수 있도록 "escape"해준 형태이다. 그래서 아무것도 남지 않는다.
+
+일단 문자`\`는 정규식에서는 `\\` 이다.  `\\\` 에서 앞의 `\`2개는 `\`가 특별한 역할을 하는 것으로부터 "escape"해준 형태일 것인데, 그 뒤에 `\`가 하나만 와있다. 하지만 앞서 밝힌 것처럼 `\`2개가 와야지 결과적으로 문자`\`가 남으므로 `\\\\`가 와야할 것이다.
+
+### Textbook 14.3.2.1
+
+#### Problem 2 Given the corpus of common words in stringr::words, create regular expressions that find all words that:
+
+#### 1.Start with “y”.
+#### 2.End with “x”
+#### 3.Are exactly three letters long. (Don’t cheat by using str_length()!)
+#### 4.Have seven letters or more.
+#### Since this list is long, you might want to use the match argument to str_view() to show only the matching or non-matching words.
+
+```{r}
+str_view(stringr::words,"^y", match = TRUE) #1
+str_view(stringr::words,"x$", match = TRUE)#2
+str_view(stringr::words,"^...$", match = TRUE)#3
+str_view(stringr::words,".......", match = TRUE)#4
+
+```
+
+### Textbook 14.3.3.1
+
+#### Problem 3 Is “q” always followed by a “u”?
+
+
+```{r}
+str_view(stringr::words,"q[^u]", match = TRUE)
+```
+
+`stringr::words`에서는 적어도 모든 경우에서 q뒤에 u가 온다.
+
+### Textbook 14.3.4.1
+
+#### Problem 3 Create regular expressions to find all words that:
+
+1. Start with three consonants.
+2. Have three or more vowels in a row.
+3. Have two or more vowel-consonant pairs in a row.
+
+```{r}
+str_view(stringr::words, "^[^aeiou]{3}", match = TRUE) #1 
+str_view(stringr::words, "[aeiou]{3,}", match = TRUE) #2
+str_view(stringr::words, "([aeiou][^aeiou]){2,}", match = TRUE) #3 
+
+```
+
+### Textbook 14.3.5.1
+
+#### Problem 2 Construct regular expressions to match words that:
+
+1.Start and end with the same character.
+
+2.Contain a repeated pair of letters (e.g. “church” contains “ch” repeated twice.)
+
+3.Contain one letter repeated in at least three places (e.g. “eleven” contains three “e”s.)
+
+```{r}
+str_view(stringr::words,  "^(.)(.*\\1$)", match = TRUE) #1
+str_view(stringr::words, "([A-Za-z][a-z]).*\\1" , match = TRUE) #2
+str_view(stringr::words,  "([A-Za-z]).*\\1.*\\1", match = TRUE) #3
+```
+
+### Textbook 14.4.1.1
+
+#### Problem 2 What word has the highest number of vowels? What word has the highest proportion of vowels? (Hint: what is the denominator?)
+```{r}
+
+word.tibble<-tibble(
+  word = words)
+word.tibble %>% 
+  mutate(vowels = str_count(word, "[aeiou]"))%>% 
+  arrange(desc(vowels))# appropriate,associate,available,colleague,encourage,experience,individual,television
+
+word.tibble %>% 
+  mutate(vowels = str_count(word, "[aeiou]"), pro_vowel = vowels/str_length(word))%>% 
+  arrange(desc(pro_vowel)) #a
+
+```
+
+
+가장 많은 모음을 가진 단어는 appropriate,associate,available,colleague,encourage,experience,individual,television이며, 각각 5개씩 갖고있다. 가장 높은 비율로 모음을 갖고 있는 것은 a이다.
+
+### Textbook 14.4.2.1
+
+#### Problem 1 In the previous example, you might have noticed that the regular expression matched “flickered”, which is not a colour. Modify the regex to fix the problem.
+```{r}
+colours <- c("red", "orange", "yellow", "green", "blue", "purple")
+colour_match <- str_c(colours, collapse = "|") 
+
+colour_match2 <- str_c("\\b(", str_c(colours, collapse = "|"), ")\\b") #modified
+
+```
+
+flickered는 색이 아님에도 red가 포함되어있어 매치되었다. 이를 해결하기 위해서는 `\b`가 필요하다. `\b`는 빈 문자열과 단어의 양쪽 가장자리를 일치시킨다.
+
+### Textbook 14.4.3.1
+
+#### Problem 1 Find all words that come after a “number” like “one”, “two”, “three” etc. Pull out both the number and the word.
+```{r}
+bo_n_w<-str_c(str_c("\\b(", str_c(c(
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"
+), collapse = "|"), ")"), " ([^ ]+)")
+sentences[str_detect(sentences, bo_n_w)] %>%
+ str_extract(bo_n_w) 
+
+
+```
+
+### Textbook 14.4.4.1
+
+#### Problem 3 Switch the first and last letters in words. Which of those strings are still words?
+```{r}
+words %>% 
+  str_replace("^([A-Za-z])(.*)([a-z])$", "\\3\\2\\1") %>% 
+  intersect(words)
+```
+
+### Textbook 14.4.5.1
+
+#### Problem 1 Split up a string like "apples, pears, and bananas" into individual components.
+```{r}
+str_split("apples, pears, and bananas", boundary("word"))[[1]]
+```
+
+### Textbook 15.3.1
+
+#### Problem 1 Explore the distribution of rincome (reported income). What makes the default bar chart hard to understand? How could you improve the plot?
+```{r}
+ggplot(gss_cat, aes(rincome)) +
+  geom_bar() # X축의 변수명들이 서로 겹쳐 읽기 어려워 기본 설정의 막대 그래프를 이해하기 어렵다.
+
+ggplot(gss_cat, aes(rincome)) +
+  geom_bar() +
+ coord_flip() # X축의 변수명들을 `coord_flip()`을 이용해 Y축으로 옮겨주어 변수명들의 가독성을 늘릴 수 있다.
+```
+
+### Textbook 15.4.1
+
+#### Problem 2 For each factor in `gss_cat` identify whether the order of the levels is arbitrary or principled.
+```{r}
+levels(gss_cat$marital)
+
+levels(gss_cat$race)
+gss_cat %>%
+ ggplot(aes(x = race)) +
+ geom_bar() +
+   scale_x_discrete(drop = FALSE) 
+
+levels(gss_cat$rincome)
+
+levels(gss_cat$partyid)
+
+levels(gss_cat$relig)
+gss_cat %>%
+ ggplot(aes(x = relig)) +
+ geom_bar() +
+   scale_x_discrete(drop = FALSE)  +
+ coord_flip()
+
+levels(gss_cat$denom)
+gss_cat %>%
+ ggplot(aes(x = denom)) +
+ geom_bar() +
+   scale_x_discrete(drop = FALSE) +
+ coord_flip() 
+```
+
+ 우선 `gss_cat`에서 factor로 나타나는 범주형 변수들은 `marital`, `race`, `rincome`, `partyid`, `relig`, `denom`이 있다. 이들의 the order of the levels가 arbitrary or principled인지 확인해볼 것이다.
+ `marital`은 어느정도 순서가 principled하다. 우선 No answer, 결혼 안한 사람과 한사람 순으로 되어있고, 결혼 한사람들 중에서도 상대방과의 관계정도의 차이의 정도에 따라 순서를 두고 있다.
+ `race`는 "Not applicable"을 제외하고는 관찰되는 데이터의 양에 따라 배열된 것이므로 principled한 것으로 보인다.
+ `rincome`은 이미 달러가 큰 것에서 작아지는 순서로 배열되어있는 것으로 보아 달러에 관한 것은 levels들이 principled되어있다. 하지만 "Not applicable"이 "No answer","Don't know","Refused" 와 떨어져 있는 것은 arbitrary한 부분으로 생각된다.
+ `partyid`는  "No answer","Don't know","Other party" 가 앞에 나와있으며 성향이 republican과 democrat한 정도에 따라 순서대로 배열되어 전체적으로 principled한 것으로 보인다.
+ `relig`는 전체적으로 arbitrary한 것으로 나타난다. 각 변수간에 어떤 경향성을 찾아볼 수 없다. 관찰되는 데이터의 수에 따라 배열된 것도 아니다.
+ `denom`은 전체적으로 arbitrary한 것으로 나타난다. 각 변수간에 어떤 경향성을 찾아볼 수 없다. 관찰되는 데이터의 수에 따라 배열된 것도 아니다.
+ 
+### Textbook 15.5.1
+
+#### Problem 1 How have the proportions of people identifying as Democrat, Republican, and Independent changed over time?
+```{r}
+gss_cat %>%
+  mutate(partyid = fct_collapse(partyid,
+    other = c("No answer", "Don't know", "Other party"),
+    Republican = c("Strong republican", "Not str republican"),
+    Independent = c("Ind,near rep", "Independent", "Ind,near dem"),
+    Democrat= c("Not str democrat", "Strong democrat")
+  )) %>%
+  count(year, partyid) %>%
+  group_by(year) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot( aes(year, prop, colour = partyid)) +
+  geom_line() #  Democrat, Republican, and Independent의 비율을 그래프로 나타내본 결과 시간이 변해도 각각의 비율의 차이는 조금씩 있으나 Independent, Democrat, Republican 순으로 많다는 것은 변하지 않았다.
+  
+```
+
+### Textbook 16.2.4
+
+#### Problem 2 What does the `tzone` argument to today() do? Why is it important?
+
+`tzone`은 컴퓨터의 시스템 time zone을 설정하는 역할을 한다. 만약 다른 time zone을 적용한다면 `today()`를 사용했을 때 다른 결과값이 나올 수 있으므로`tzone`설정은 중요하다.
+
+### Textbook 16.3.4
+
+#### Problem 6 What makes the distribution of `diamonds$carat` and `flights$sched_dep_time` similar?
+```{r}
+diamonds %>% 
+  mutate(carat_h = (carat*100)%%100) %>% 
+  group_by(carat_h) %>% 
+  summarise(n = n()) %>% ggplot( mapping=aes(carat_h, n)) +
+  geom_line()
+
+
+flights %>% 
+  mutate(minute = sched_dep_time%%100) %>% 
+  group_by(minute) %>% 
+  summarise(n = n()) %>% ggplot( mapping=aes(minute, n)) +
+  geom_line()
+
+```
+
+`diamonds$carat` 과 `flights$sched_dep_time`의 분포가 비슷해보이는 이유는 이 데이터들에는 사람들의 bias가 어느정도 포함되어있기 때문이다. 두 그래프에서는 특정 x 값에서 많은 value를 가지는 모습을 볼 수 있는데, 사람들이 좋아하는 소수점값의 캐럿에 많은 다이아몬드가 있고(0, 1/3, 0.5, 2/3 등), 사람들이 좋아하는 시간에 많은 비행기(00분, 30분, 혹은 5로 끝나는 분)가 출발한다.
+
+### Textbook 16.4.5
+
+#### Problem 4 Write a function that given your birthday (as a date), returns how old you are in years.
+```{r}
+year<-function(date){date%--% today() %/% years(1)}
+year("2001-01-25")
+```
+
