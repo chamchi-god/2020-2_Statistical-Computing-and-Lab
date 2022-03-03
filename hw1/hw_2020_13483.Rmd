@@ -1,0 +1,231 @@
+---
+title: "326.212 Homework 1"
+author: "KIM DONGWON"
+output: html_document
+---
+
+
+
+## 2020-13483
+
+### Textbook 3.2.4
+
+#### Problem 1.  Run ggplot(data = mpg). What do you see?
+
+```{R}
+library(tidyverse) 
+ggplot(data = mpg)
+```
+
+회색 배경만 보일뿐 `data = mpg`에 관한 것은 보이지 않는다.
+
+#### Problem 5.  What happens if you make a scatterplot of class vs drv? Why is the plot not useful?
+```{r}
+ggplot(data = mpg)+geom_point(mapping = aes(x = class, y = drv))
+```
+
+ 가로축이 'class', 세로축이 'drv'인 산점도가 그려진다. `class`와 `drv` 변수는 범주형 변수이기 때문에 산점도만으로 어떤 의미있는 것을 찾기는 어렵다. 그리고 여기서는 각 점에 몇 개의 데이터가 존재하는지 알 수 없다.
+
+### Textbook 3.3.1
+
+#### Problem 1. What’s gone wrong with this code? Why are the points not blue?
+```{r}
+ggplot(data = mpg) + 
+  geom_point(mapping = aes(x = displ, y = hwy, color = "blue"))
+```
+
+ 점의 색들을 파란색으로 나타내려 했지만, `color = "blue"`를 `aes` 내부에 포함시키면서 'blue'가 색이 아니라 이 이름을 가진 하나의 변수 취급을 받는다.. `aes` 외부로 `color = "blue"`를 옮겨야지 `color = "blue"` 코드가 aesthetic mapping과 관련된 것이 아니라 단순 점의 색만 바꾸려는 것임을 나타낼 수 있다.
+
+#### Problem 5. What does the stroke aesthetic do? What shapes does it work with? (Hint: use ?geom_point)
+```{r}
+?geom_point
+vignette("ggplot2-specs")
+
+```
+
+ 
+`stroke`는 점의 테두리의 굵기(크기)를 제어하는데 사용된다. `shape` 21~25와만 함께 작동할 수 있는데 그 이유는 그 `shape`들만 안쪽부분과 바깥쪽 테두리와 나누어진 동시에 `colour`와 `fill` 특성을 보유하고 있기 때문이다. 
+
+### Textbook 3.5.1
+
+#### Problem 2. What do the empty cells in plot with facet_grid(drv ~ cyl) mean? How do they relate to this plot?
+```{r}
+ggplot(data = mpg) + 
+  geom_point(mapping = aes(x = drv, y = cyl))
+
+
+```
+
+
+ 빈 그리드는 `cyl`과 `drv`의 특정 조합에서 관측치가 없음을 알려준다. 이는 주어진 산점도에서 점이 찍히지 않은 부분에 해당한다.  
+
+#### Problem 6. When using facet_grid() you should usually put the variable with more unique levels in the columns.Why?
+
+
+ 열에다가 값이 여러개 없는 변수를 두어야 열들 사이에 공간이 넓어진다. 이에 각 그리드의 가로부분이 길어질 것이므로 그래프의 추세 등을 더 잘 확인 할수 있을 것이다. 
+
+### Textbook 3.6.1
+
+#### Problem 2. Run this code in your head and predict what the output will look like. Then, run the code in R and check your predictions.
+```{r}
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy, color = drv)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE)
+```
+
+ 
+ mpg 데이터들을 x축은 `displ`, y축은 `hwy`를 기준으로 점으로 배치할 것이고, drv에 따라 색을 달리 할 것이다. 그리고 각 `drv`에 해당하는 데이터들을 가장 잘 나타내는 선들이 그려질 것이다.
+
+#### Problem 6. Recreate the R code necessary to generate the following graphs
+
+```{r}
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE)
+
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point() + 
+  geom_smooth(mapping = aes(group = drv), se = FALSE)
+
+ggplot(data = mpg, aes(x = displ, y = hwy, color = drv)) +
+  geom_point() +
+  geom_smooth(se = FALSE)
+
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point(mapping = aes(color=drv)) + 
+  geom_smooth(se = FALSE)
+
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) + 
+  geom_point(mapping = aes(color=drv)) + 
+  geom_smooth(se = FALSE, mapping = aes(linetype = drv))
+
+ggplot(data = mpg, aes(x = displ, y = hwy)) +
+  geom_point(mapping = aes(fill = drv), color = 'white', stroke = 2, shape = 21)
+ 
+ 
+```
+
+
+### Textbook 3.7.1
+
+#### Problem 1. What is the default geom associated with stat_summary()? How could you rewrite the previous plot to use that geom function instead of the stat function?
+```{r}
+ggplot(data = diamonds) + 
+  stat_summary(
+    mapping = aes(x = cut, y = depth),
+    fun.ymin = min,
+    fun.ymax = max,
+    fun.y = median
+  ) # before
+ggplot(data = diamonds) +
+  geom_pointrange(
+    mapping = aes(x = cut, y = depth),
+    stat = "summary",
+    fun.min = min,
+    fun.max = max,
+    fun = median
+  ) # after
+```
+
+`stat_summary()`의 디폴트 geom은 geom_pointrange이다. `geom_pointrange`는 `ymin` 또는 `ymax` 값을 자동으로 계산하지 않으므로 `stat = "summary"`를 이용해 구할 수 있다. 주어진 코드처럼 x축,y축 설정한 뒤 `stat = "summary"`를 이용해 최솟값, 최댓값, 중앙값 구해주면 이전의 산점도를 그려낼 수 있다.
+
+#### Problem 5. In our proportion bar chart, we need to set group = 1. Why? In other words what is the problem with these two graphs?
+```{r}
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut, y = ..prop..))
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut, fill = color, y = ..prop..))
+```
+ 
+ `group = 1`이라고 지정해주지 않는다면 각 그룹에서 비율은 모두 1이 되어 높이가 다 같아진다. 전체가 1그룹으로 묶여 이들 비율의 합이 1로 묶여야 의미있는 막대그래프를 그릴 수 있을 것이다. 위의 코드들도 이러한 이유로 문제가 발생한 것이다.
+
+### Textbook 3.8.1
+
+#### Problem 1. What is the problem with this plot? How could you improve it?
+```{r}
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy)) + 
+  geom_point()
+
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy)) +
+  geom_point(position = "jitter")
+```
+
+한 점에서 복수의 결과값들이 관찰될 수 있지만 이 산점도에서는 이 부분이 반영되지 못하고 있다. 이럴 때 `position = "jitter"`를 쓰면 문제가 해결될 것이다.
+
+#### Problem 3. Compare and contrast geom_jitter() with geom_count()
+```{r}
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy)) +
+  geom_jitter()
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy)) +
+  geom_count()
+```
+
+두 함수 모두 한 점에서 복수의 결과값들이 관찰될 수 있지만 이것이 산점도에 반영되지 않을 수 있다는 문제점을 해결할 수 있다는 공통점이 있다. 차이점으로는 `geom_jitter()`는  원래  x,y값에 약간 변동이 발생한채로 점들이 산점도에 나타날 수 있지만, `geom_count()`는 x,y값이 변하지 않는 대신 점의 크기가 달라진다.(점의 크기가 클수록 관찰결과 많음)
+
+### Textbook 3.9.1
+
+#### Problem 1. Turn a stacked bar chart into a pie chart using coord_polar().
+```{r}
+ggplot(data = diamonds,mapping = aes(x = 0, fill = clarity)) + 
+  geom_bar()+ #before
+coord_polar(theta = "y") #추가된 부분
+```
+
+#### Problem 4. What does the plot below tell you about the relationship between city and highway mpg? Why is coord_fixed() important? What does geom_abline() do?
+```{r}
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy)) +
+  geom_point() + 
+ geom_abline() +
+  coord_fixed()
+```
+
+ 도심에서 연비나 고속도로에서 연비는 비례관계에 있으며 도심에서 연비보다는 고속도로에서 연비가 더 효율적이다. `coord_fixed()`는 축에 있는 데이터 단위의 물리적 표현 사이에 지정된 비율을 강제한다. 비율은 x축의 1개 단위에 해당하는 y축의 단위 수를 나타낸다. 기본값인 비율 = 1은 x축의 한 단위가 y축의 한 단위와 같은 길이를 갖도록 한다. 그러므로  `coord_fixed()`를 통해 기준선의 각이 45도가 되어 산점도를 이해하기 더 쉬워진다. `geom_abline()`은 수평, 수직 또는 대각선(경사와 절편에 의해 지정됨) 중 하나에 기준선을 추가하는 역할을 한다.
+
+### Textbook 6.3
+
+#### Problem 2. What other common mistakes will RStudio diagnostics report? Read https://support.rstudio.com/hc/en-us/articles/205753617-Code-Diagnostics to find out.
+
+ 변수가 생성되었지만 사용되지 않는 것이 있는지를 체크해준다. 이는 이전 코드를 정리하거나 다른 오류(특정 변수를 사용해야 한다고 생각하지만 그렇지 않은 경우)를 찾고자할 때 유용하다. (페이지에서 얻을 수 있는 정보)
+
+### Textbook 28.2.1
+
+#### Problem 1. Create one plot on the fuel economy data with customised title, subtitle, caption, x, y, and colour labels.
+```{r}
+ggplot(data = mpg,mapping = aes(x = class, y = hwy, color = class))+
+  geom_point()+
+ labs(
+    title = "차종에 따른 연비차이",
+    subtitle = "pick up, minivan, suv의 낮은 연비",
+    caption = "snu.gov",
+    x = "차종",
+    y ="고속도로에서의 연비",
+    colour = "차종"
+  )
+```
+
+### Textbook 28.4.4
+
+#### Problem 4 Use override.aes to make the legend on the following plot easier to see.
+```{r}
+ggplot(diamonds, aes(carat, price)) +
+  geom_point(aes(colour = cut), alpha = 1/20)+ # before
+ theme(legend.position = "bottom") +
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) #add
+```
+
+투명도를 조절해 범례를 더 잘 보이게 할 수 있다. 그러므로 `override.aes`를 이용해 `alpha`값을 조정해줘야한다.
+
+###Extra Questions1 3.2.4.5 Write an R script that when run performs the following:
+
+```{r}
+x<-5
+y<-6 #a
+log(x+y) #b
+log10(x*y/2) #c
+x^(1/3)+2*y^(1/4) #d
+10^(x-y)+exp(x+y) #e
+```
+
+###Extra Questions2 3.2.4.5 Why does the following code not work?
+
+`my_variable`에 123 값을 부여했지만, `my_varlable`를 `print`하려했으므로 오류가 뜬다. 변수의 이름이 조금이라도 다르면 아예 다른 것으로 취급한다. 
