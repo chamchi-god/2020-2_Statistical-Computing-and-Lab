@@ -1,0 +1,262 @@
+---
+title: "326.212 Final Project: Part 3 - Q1"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, 
+                      message = FALSE, warning = FALSE)
+```
+
+```{r packages, include = FALSE}
+# 추가로 필요한 패키지가 있다면 이곳에 작성하시오.
+library(tidyverse)
+library(tmap)
+library(sf)
+library(dplyr)
+library(lubridate)
+library(knitr)
+```
+
+## 2020-12345 Ahn Woo Jin
+
+## Part 3 - Q1
+```{r, include=FALSE}
+info<-read_csv("data/Measurement_info.csv")
+item_info<-read_csv("data/Measurement_item_info.csv")
+station_info<-read_csv("data/Measurement_station_info.csv")
+
+data_info<-inner_join(info,item_info)%>%
+  inner_join(station_info)
+
+Pollution_level<-NULL
+for ( i in seq_len(nrow(data_info))) {
+  if (data_info$`Average value`[i] <0) {
+    Pollution_level[i]<-NA
+  } else if (data_info$`Average value`[i] <= data_info$`Good(Blue)`[i]){
+    Pollution_level[i]<-"Good(Blue)"
+  } else if ( data_info$`Average value`[i] <= data_info$`Normal(Green)`[i]){
+    Pollution_level[i]<-"Normal(Green)"
+  } else if (data_info$`Average value`[i] <= data_info$`Bad(Yellow)`[i]){
+     Pollution_level[i]<-"Bad(Yellow)"
+  } else if (data_info$`Average value`[i] <= data_info$`Very bad(Red)`[i]){
+     Pollution_level[i]<-"Very bad(Red)"
+  } else if (data_info$`Average value`[i] > data_info$`Very bad(Red)`[i]){
+    Pollution_level[i]<-NA
+  }
+}
+
+data_info2<-data_info%>%
+  mutate( "Pollution level" = Pollution_level )
+data_info3<-data_info2%>%
+  select(-c("Station code" : "Item code" , "Address":"Longitude", "Unit of measurement":"Very bad(Red)"))
+
+class(data_info3$`Measurement date`)
+class(data_info3$`Average value`)
+class(data_info3$`Instrument status`)
+class(data_info3$`Item name`) #character type 변수
+class(data_info3$`Station name(district)`) #character type 변수
+class(data_info3$`Pollution level`) #character type 변수
+
+fac_ite<-as.factor(data_info3$`Item name`) #character type에서 factor type으로 변환
+fac_sta<-as.factor(data_info3$`Station name(district)`) #character type 에서 factor type으로 변환
+fac_pol<-as.factor(data_info3$`Pollution level`) #character type 에서 factor type으로 변환
+
+data_info4<-data_info3%>%
+  dplyr::select(-c("Item name" , "Station name(district)", "Pollution level"))%>% 
+  dplyr::mutate("Item name" = fac_ite, "Station name(district)" = fac_sta, "Pollution level" = fac_pol)
+
+data_info5<-data_info4%>%filter(!is.na(`Pollution level`))
+
+a<-data_info5%>%filter(`Instrument status`==1|`Instrument status`==2|`Instrument status`==4|`Instrument status`==8)
+b<-data_info5%>%semi_join(a, by = c("Measurement date", "Item name"))%>%filter(`Instrument status`==0)%>%group_by(`Measurement date`, `Item name`)%>%summarise(`Average` = mean(`Average value`))
+c<-full_join(data_info5,b)%>%filter(`Instrument status` ==0 |`Instrument status`==9)%>%dplyr::select(-`Average`)
+d<-full_join(data_info5,b)%>%filter(`Instrument status`==1|`Instrument status`==2|`Instrument status`==4|`Instrument status`==8)%>%dplyr::select(-`Average value`)%>%
+  rename(`Average value` = `Average`)
+data_info6<-rbind(c,d)%>%arrange(`Measurement date`)
+
+data_info8<-data_info6%>%filter(`Instrument status` != 9)
+
+e<-data_info%>%select(`Item name`,`Good(Blue)`,`Normal(Green)`,`Bad(Yellow)`,`Very bad(Red)`)%>%unique()
+data_info8<-data_info8%>%
+  inner_join(e)
+
+Pollution_level2<-NULL
+for ( i in seq_len(nrow(data_info8))) {
+  if (data_info8$`Average value`[i] <0) {
+    Pollution_level2[i]<-NA
+  } else if (data_info8$`Average value`[i] <= data_info8$`Good(Blue)`[i]){
+    Pollution_level2[i]<-"Good(Blue)"
+  } else if ( data_info8$`Average value`[i] <= data_info8$`Normal(Green)`[i]){
+    Pollution_level2[i]<-"Normal(Green)"
+  } else if (data_info8$`Average value`[i] <= data_info8$`Bad(Yellow)`[i]){
+     Pollution_level2[i]<-"Bad(Yellow)"
+  } else if (data_info8$`Average value`[i] <= data_info8$`Very bad(Red)`[i]){
+     Pollution_level2[i]<-"Very bad(Red)"
+  } else if (data_info8$`Average value`[i] > data_info8$`Very bad(Red)`[i]){
+    Pollution_level2[i]<-NA
+  }
+}
+
+data_info9<-data_info8%>%
+  mutate( "Pollution level" = Pollution_level2 )%>%dplyr::select(-c(`Good(Blue)`,`Normal(Green)`,`Bad(Yellow)`,`Very bad(Red)`))
+
+date_time<-ymd_hms(data_info9$`Measurement date`)
+Year<-year(date_time)
+Month<-month(date_time)
+Day<-mday(date_time)
+Hour<-hour(date_time)
+data_info11<-data_info9%>%
+  mutate("Year" = Year, "Month" = Month, "Day" = Day, "Hour" = Hour)
+```
+
+### [문제 1]
+
+```{r}
+korea_shp <- st_read("data/SIG_202005/SIG.shp")
+korea_shp$SIG_KOR_NM <- iconv(korea_shp$SIG_KOR_NM, from = "CP949", to = "UTF-8", sub = NA, mark = TRUE, toRaw = FALSE)
+ seoul_shp <- korea_shp %>% filter(str_detect(SIG_CD, "^11")) 
+ map_seoul <- tm_shape(seoul_shp) + tm_fill() + tm_borders()
+  print(map_seoul) #영역도
+    
+pm2.5_17<-data_info11%>%
+  filter(`Item name` == "PM2.5", Year == 2017)%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average PM2.5`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #2017년 각 구별 "PM2.5" 농도의 평균
+
+pm2.5_18<-data_info11%>%
+  filter(`Item name` == "PM2.5", Year == 2018)%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average PM2.5`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #2018년 각 구별 "PM2.5" 농도의 평균
+
+pm2.5_19<-data_info11%>%
+  filter(`Item name` == "PM2.5", Year == 2019)%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average PM2.5`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #2019년 각 구별 "PM2.5" 농도의 평균
+
+seoul_shp2017<-seoul_shp%>%
+   inner_join(pm2.5_17, by = c("SIG_ENG_NM")) 
+#2017년 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의 변수로 추가
+
+map_seoul2017 <- tm_shape(seoul_shp2017) + tm_fill( col = 'Average PM2.5' ) + tm_borders()
+print(map_seoul2017)
+#2017년 각 구별 PM2.5 농도를 시각화 
+  
+seoul_shp2018<-seoul_shp%>%
+  inner_join(pm2.5_18, by = c("SIG_ENG_NM"))
+#2018년 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의의 변수로 추가
+
+map_seoul2018 <- tm_shape(seoul_shp2018) + tm_fill( col = 'Average PM2.5' ) + tm_borders()
+print(map_seoul2018)
+#2018년 각 구별 PM2.5 농도를 시각화
+  
+seoul_shp2019<-seoul_shp%>%
+  inner_join(pm2.5_19, by = c("SIG_ENG_NM"))
+#2019년 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의의 변수로 추가
+
+map_seoul2019 <- tm_shape(seoul_shp2019) + tm_fill( col = 'Average PM2.5' ) + tm_borders()
+print(map_seoul2019)
+#2019년 각 구별 PM2.5 농도를 시각화  
+  
+#그림을 바탕으로 분석 결과, 모든 연도에서 남서 방향에 위치한 구에서 초미세먼지("PM2.5")가 비교적 높은 농도로 관측됨을 알 수 있었다.
+
+  
+```
+
+### [문제 2]
+
+```{r}
+season<-NULL
+for ( i in seq_len(nrow(data_info11))) {
+  if (data_info11$`Month`[i] <=2) {
+    season[i]<-"winter"
+  } else if (data_info11$`Month`[i] <= 5){
+    season[i]<-"spring"
+  } else if (data_info11$`Month`[i] <= 8){
+    season[i]<-"summer"
+  } else if (data_info11$`Month`[i] <= 11){
+     season[i]<-"fall"
+  } else if (data_info11$`Month`[i] <=12){
+    season[i]<-"winter"
+  } 
+} #12–2월은 겨울, 3–5월은 봄, 6–8월은 여름, 9–11월은 가을
+
+data_info13<-data_info11%>%
+  mutate( "season" = season ) # 기존 데이터에 새로운 변수 "season" 추가
+
+korea_shp <- st_read("data/SIG_202005/SIG.shp")
+korea_shp$SIG_KOR_NM <- iconv(korea_shp$SIG_KOR_NM, from = "CP949", to = "UTF-8", sub = NA, mark = TRUE, toRaw = FALSE)
+ seoul_shp <- korea_shp %>% filter(str_detect(SIG_CD, "^11"))
+ 
+  NO2_SPR<-data_info13%>%
+  filter(`Item name` == "NO2", `season` == "spring")%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average NO2`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #봄철 각 구별 "PM2.5" 농도의 평균
+  
+  NO2_SUM<-data_info13%>%
+  filter(`Item name` == "NO2", `season` == "summer")%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average NO2`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #여름철 각 구별 "PM2.5" 농도의 평균
+  
+  NO2_FAL<-data_info13%>%
+  filter(`Item name` == "NO2", `season` == "fall")%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average NO2`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #가을철 각 구별 "PM2.5" 농도의 평균
+  
+  NO2_WIN<-data_info13%>%
+  filter(`Item name` == "NO2", `season` == "winter")%>%
+  group_by(`Station name(district)`)%>%
+  summarise(`Average NO2`= mean(`Average value`), `Item name` = `Item name`)%>%
+  rename(`SIG_ENG_NM` = `Station name(district)`)%>%
+           unique() #겨울철 각 구별 "PM2.5" 농도의 평균
+  
+  breaks = seq(0.01, 0.045, by = 0.005)
+  
+  seoul_shp_spr<-seoul_shp%>%
+   inner_join(NO2_SPR, by = c("SIG_ENG_NM"))
+  #봄철 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의 변수로 추가
+   
+  map_seoul_spr <- tm_shape(seoul_shp_spr) + tm_fill( col = 'Average NO2', breaks = breaks ) + tm_borders()
+  print(map_seoul_spr)
+  #봄철 각 구별 PM2.5 농도를 시각화
+  
+ seoul_shp_sum<-seoul_shp%>%
+   inner_join(NO2_SUM, by = c("SIG_ENG_NM"))
+   #여름철 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의 변수로 추가
+ 
+   map_seoul_sum <- tm_shape(seoul_shp_sum) + tm_fill( col = 'Average NO2', breaks = breaks ) + tm_borders()
+  print(map_seoul_sum)
+  #여름철 각 구별 PM2.5 농도를 시각화
+  
+seoul_shp_fal<-seoul_shp%>%
+   inner_join(NO2_FAL, by = c("SIG_ENG_NM"))
+  #가을철 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의 변수로 추가
+
+   map_seoul_fal <- tm_shape(seoul_shp_fal) + tm_fill( col = 'Average NO2', breaks = breaks ) + tm_borders()
+  print(map_seoul_fal)
+  #가을철 각 구별 PM2.5 농도를 시각화
+  
+  seoul_shp_win<-seoul_shp%>%
+   inner_join(NO2_WIN, by = c("SIG_ENG_NM"))
+    #겨울철 각 구별 "PM2.5" 농도의 평균을 `seoul_shp`의 변수로 추가
+  
+   map_seoul_win <- tm_shape(seoul_shp_win) + tm_fill( col = 'Average NO2', breaks = breaks ) + tm_borders()
+  print(map_seoul_win)
+    #겨울철 각 구별 PM2.5 농도를 시각화
+  
+  
+  #그림을 바탕으로 분석결과,각 계절에서 어느 방위에서 미세먼지의 농도가 뚜렷하게 높다고 말하기는 어렵다. 전체적으로 비슷한 수치를 보였으며 계절에 따른 미세먼지 농도의 변화를 보자면 여름철에 비해 겨울철에 미세먼지 농도가 뚜렷하게 높았다. 봄철과 가을철은 여름철과 겨울철 사이의 농도를 보였다. 
+```
+

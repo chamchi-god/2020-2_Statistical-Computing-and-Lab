@@ -1,0 +1,330 @@
+---
+title: "326.212 Final Project: Part 3 - Q2"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, 
+                      message = FALSE, warning = FALSE)
+```
+
+```{r packages, include = FALSE}
+# 추가로 필요한 패키지가 있다면 이곳에 작성하시오.
+library(tidyverse)
+library(MASS)
+library(dplyr)
+library(knitr)
+library(lubridate)
+```
+
+## 2020-13483 Kom Dong Won
+
+## Part 3 - Q2
+```{r, include=FALSE}
+info<-read_csv("data/Measurement_info.csv")
+item_info<-read_csv("data/Measurement_item_info.csv")
+station_info<-read_csv("data/Measurement_station_info.csv")
+
+data_info<-inner_join(info,item_info)%>%
+  inner_join(station_info)
+
+Pollution_level<-NULL
+for ( i in seq_len(nrow(data_info))) {
+  if (data_info$`Average value`[i] <0) {
+    Pollution_level[i]<-NA
+  } else if (data_info$`Average value`[i] <= data_info$`Good(Blue)`[i]){
+    Pollution_level[i]<-"Good(Blue)"
+  } else if ( data_info$`Average value`[i] <= data_info$`Normal(Green)`[i]){
+    Pollution_level[i]<-"Normal(Green)"
+  } else if (data_info$`Average value`[i] <= data_info$`Bad(Yellow)`[i]){
+     Pollution_level[i]<-"Bad(Yellow)"
+  } else if (data_info$`Average value`[i] <= data_info$`Very bad(Red)`[i]){
+     Pollution_level[i]<-"Very bad(Red)"
+  } else if (data_info$`Average value`[i] > data_info$`Very bad(Red)`[i]){
+    Pollution_level[i]<-NA
+  }
+}
+
+data_info2<-data_info%>%
+  mutate( "Pollution level" = Pollution_level )
+data_info3<-data_info2%>%
+  dplyr::select(-c("Station code" : "Item code" , "Address":"Longitude", "Unit of measurement":"Very bad(Red)"))
+
+class(data_info3$`Measurement date`)
+class(data_info3$`Average value`)
+class(data_info3$`Instrument status`)
+class(data_info3$`Item name`) #character type 변수
+class(data_info3$`Station name(district)`) #character type 변수
+class(data_info3$`Pollution level`) #character type 변수
+
+fac_ite<-as.factor(data_info3$`Item name`) #character type에서 factor type으로 변환
+fac_sta<-as.factor(data_info3$`Station name(district)`) #character type 에서 factor type으로 변환
+fac_pol<-as.factor(data_info3$`Pollution level`) #character type 에서 factor type으로 변환
+
+data_info4<-data_info3%>%
+  dplyr::select(-c("Item name" , "Station name(district)", "Pollution level"))%>% 
+  dplyr::mutate("Item name" = fac_ite, "Station name(district)" = fac_sta, "Pollution level" = fac_pol)
+
+data_info5<-data_info4%>%filter(!is.na(`Pollution level`))
+
+a<-data_info5%>%filter(`Instrument status`==1|`Instrument status`==2|`Instrument status`==4|`Instrument status`==8)
+b<-data_info5%>%semi_join(a, by = c("Measurement date", "Item name"))%>%filter(`Instrument status`==0)%>%group_by(`Measurement date`, `Item name`)%>%summarise(`Average` = mean(`Average value`))
+c<-full_join(data_info5,b)%>%filter(`Instrument status` ==0 |`Instrument status`==9)%>%dplyr::select(-`Average`)
+d<-full_join(data_info5,b)%>%filter(`Instrument status`==1|`Instrument status`==2|`Instrument status`==4|`Instrument status`==8)%>%dplyr::select(-`Average value`)%>%
+  rename(`Average value` = `Average`)
+data_info6<-rbind(c,d)%>%arrange(`Measurement date`)
+
+data_info8<-data_info6%>%filter(`Instrument status` != 9)
+
+e<-data_info%>%dplyr::select(`Item name`,`Good(Blue)`,`Normal(Green)`,`Bad(Yellow)`,`Very bad(Red)`)%>%unique()
+data_info8<-data_info8%>%
+  inner_join(e)
+
+Pollution_level2<-NULL
+for ( i in seq_len(nrow(data_info8))) {
+  if (data_info8$`Average value`[i] <0) {
+    Pollution_level2[i]<-NA
+  } else if (data_info8$`Average value`[i] <= data_info8$`Good(Blue)`[i]){
+    Pollution_level2[i]<-"Good(Blue)"
+  } else if ( data_info8$`Average value`[i] <= data_info8$`Normal(Green)`[i]){
+    Pollution_level2[i]<-"Normal(Green)"
+  } else if (data_info8$`Average value`[i] <= data_info8$`Bad(Yellow)`[i]){
+     Pollution_level2[i]<-"Bad(Yellow)"
+  } else if (data_info8$`Average value`[i] <= data_info8$`Very bad(Red)`[i]){
+     Pollution_level2[i]<-"Very bad(Red)"
+  } else if (data_info8$`Average value`[i] > data_info8$`Very bad(Red)`[i]){
+    Pollution_level2[i]<-NA
+  }
+}
+
+data_info9<-data_info8%>%
+  mutate( "Pollution level" = Pollution_level2 )%>%dplyr::select(-c(`Good(Blue)`,`Normal(Green)`,`Bad(Yellow)`,`Very bad(Red)`))
+
+```
+
+### Step 1
+
+```{r}
+#과정1
+weather2017<-read_csv("data/weather2017.csv")
+weather2018<-read_csv("data/weather2018.csv")
+weather2019<-read_csv("data/weather2019.csv")
+
+weather<-rbind(weather2017,weather2018)%>%rbind(weather2019)
+  names(weather) = c("Station code", "District", "Measurement date", "Temper", "Direct","Speed") 
+ 
+#과정2 
+weather2017Jongno<-read_csv("data/weather2017(Jongno).csv")
+weather2018Jongno<-read_csv("data/weather2018(Jongno).csv")
+weather2019Jongno<-read_csv("data/weather2019(Jongno).csv")
+
+weatherJongno<-rbind(weather2017Jongno,weather2018Jongno)%>%rbind(weather2019Jongno)
+  names(weatherJongno) = c("Station code", "District", "Measurement date", "Temper", "Direct", "Speed") #과정 2
+
+#과정3
+new_weather<-rbind(weather,weatherJongno)
+
+#과정4
+kmacode<-read_csv("data/kmacode.csv")
+new_weather1<-new_weather%>%
+  inner_join(kmacode, by = "Station code")%>%
+  dplyr::select(-c("Station code","District.x"))%>%
+  rename("District" = "District.y") #4
+
+#과정5
+newdata<-data_info9%>%
+  dplyr::select("Measurement date", "Station name(district)", "Item name", "Average value")%>%
+  rename( "District" = "Station name(district)")%>%
+  spread("Item name","Average value") #5
+
+#과정6
+new_weather2<-new_weather1%>%
+  inner_join(newdata, by = c("Measurement date","District"))
+  
+head(new_weather2)
+
+
+```
+
+### Step 2
+
+```{r}
+#문제 1 위의 과정을 거쳐 그림을 재현하여라.
+new_weather21<-new_weather2%>%
+  filter(`PM10` > 150 & !is.na(`PM10`))%>%
+  dplyr::select("Direct")%>% #1 PM10 의 값이 150을 초과하며 결측치가 아닌 행들만 추출한 뒤, 다시 Direct 의 열만 추출
+  filter(`Direct` > 0 &`Direct` <= 360 & !is.na(`Direct`)) #3 Direct 의 값이 0 초과 360 이하이며 결측치가 아닌 행들만 추출
+
+new_weather22<-new_weather2%>%
+  filter(`PM2.5` > 75 & !is.na(`PM2.5`))%>%
+  dplyr::select("Direct")%>% #2 PM2.5 의 값이 75를 초과하며 결측치가 아닌 행들만 추출한 뒤, 다시 Direct 의 열만 추출
+  filter(`Direct` > 0 &`Direct` <= 360 & !is.na(`Direct`)) #3 Direct 의 값이 0 초과 360 이하이며 결측치가 아닌 행들만 추출
+
+new_weather21a1<-new_weather21%>%
+  filter(`Direct` >= 0.1 & `Direct` <= 22.5)%>%
+  cbind("8cardinal" = "N")
+new_weather21a2<-new_weather21%>%
+  filter(`Direct` >= 337.6 & `Direct` <= 360.0)%>%
+  cbind("8cardinal" = "N")
+new_weather21b<-new_weather21%>%
+  filter(`Direct` >= 22.6 & `Direct` <= 67.5)%>%
+  cbind("8cardinal" = "NE")
+new_weather21c<-new_weather21%>%
+  filter(`Direct` >= 67.6 & `Direct` <= 112.5)%>%
+  cbind("8cardinal" = "E")
+new_weather21d<-new_weather21%>%
+  filter(`Direct` >= 112.6 & `Direct` <= 157.5)%>%
+  cbind("8cardinal" = "SE")
+new_weather21e<-new_weather21%>%
+  filter(`Direct` >= 157.6 & `Direct` <= 202.5)%>%
+  cbind("8cardinal" = "S")
+new_weather21f<-new_weather21%>%
+  filter(`Direct` >= 202.6 & `Direct` <= 247.5)%>%
+  cbind("8cardinal" = "SW")
+new_weather21g<-new_weather21%>%
+  filter(`Direct` >= 247.6  & `Direct` <= 292.5)%>%
+  cbind("8cardinal" = "W")
+new_weather21h<-new_weather21%>%
+  filter(`Direct` >= 292.6 & `Direct` <= 337.5)%>%
+  cbind("8cardinal" = "NW")
+
+new_weather211<-rbind(new_weather21a1,new_weather21a2)%>%rbind(new_weather21b)%>%rbind(new_weather21c)%>%rbind(new_weather21d)%>%rbind(new_weather21e)%>%rbind(new_weather21f)%>%rbind(new_weather21g)%>%rbind(new_weather21h)%>%
+  dplyr::select("8cardinal")%>%
+  rename(`Direct` = `8cardinal`) #4 Direct 의 데이터를 Direct 의 값에 따라 8방위 풍향(N, NE, E, SE, S, SW, W, NW)으로 덮어쓰기
+
+new_weather211$Direct <- factor(new_weather211$Direct, levels= c("N", "NE", "E","SE", "S", "SW","W", "NW" ))
+ new_weather2111<- prop.table(table(new_weather211$Direct))%>%as.data.frame()%>%dplyr::mutate("Item" = "PM10") 
+ #5 Direct 의 열에 대하여 8방위 풍향별 비율을 계산
+
+new_weather22a1<-new_weather22%>%
+  filter(`Direct` >= 0.1 & `Direct` <= 22.5)%>%
+  cbind("8cardinal" = "N")
+new_weather22a2<-new_weather22%>%
+  filter(`Direct` >= 337.6 & `Direct` <= 360.0)%>%
+  cbind("8cardinal" = "N")
+new_weather22b<-new_weather22%>%
+  filter(`Direct` >= 22.6 & `Direct` <= 67.5)%>%
+  cbind("8cardinal" = "NE")
+new_weather22c<-new_weather22%>%
+  filter(`Direct` >= 67.6 & `Direct` <= 112.5)%>%
+  cbind("8cardinal" = "E")
+new_weather22d<-new_weather22%>%
+  filter(`Direct` >= 112.6 & `Direct` <= 157.5)%>%
+  cbind("8cardinal" = "SE")
+new_weather22e<-new_weather22%>%
+  filter(`Direct` >= 157.6 & `Direct` <= 202.5)%>%
+  cbind("8cardinal" = "S")
+new_weather22f<-new_weather22%>%
+  filter(`Direct` >= 202.6 & `Direct` <= 247.5)%>%
+  cbind("8cardinal" = "SW")
+new_weather22g<-new_weather22%>%
+  filter(`Direct` >= 247.6  & `Direct` <= 292.5)%>%
+  cbind("8cardinal" = "W")
+new_weather22h<-new_weather22%>%
+  filter(`Direct` >= 292.6 & `Direct` <= 337.5)%>%
+  cbind("8cardinal" = "NW")
+
+new_weather222<-rbind(new_weather22a1,new_weather22a2)%>%rbind(new_weather22b)%>%rbind(new_weather22c)%>%rbind(new_weather22d)%>%rbind(new_weather22e)%>%rbind(new_weather22f)%>%rbind(new_weather22g)%>%rbind(new_weather22h)%>%
+  dplyr::select(`8cardinal`)%>%
+  rename(`Direct` = `8cardinal`) #4 Direct 의 데이터를 Direct 의 값에 따라 8방위 풍향(N, NE, E, SE, S, SW, W, NW)으로 덮어쓰기
+
+new_weather222$Direct <- factor(new_weather222$Direct, levels= c("N", "NE", "E","SE", "S", "SW","W", "NW" ))
+new_weather2222<-prop.table(table(new_weather222$Direct))%>%as.data.frame()%>%dplyr::mutate("Item" = "PM2.5") 
+#5 Direct 의 열에 대하여 8방위 풍향별 비율을 계산
+
+A<-rbind(new_weather2111,new_weather2222)
+
+  ggplot(A,mapping = aes(x = Var1 ,y = Freq, group = `Item`, color =`Item` ))+
+  geom_point(size = 2, color = "black")+
+    geom_polygon(fill = NA)+
+    coord_polar(start = 15*pi / 8 )+
+    theme_light()+
+    xlab("")+
+    ylab("propotion") #6 그림 그리기
+  
+#Q2. 위 그림을 바탕으로 미세먼지 원인에 대한 결론을 제시하고, 이러한 결론이 나올 수 있는 이유를 분석하여라.
+  
+#A2. 고농도 미세먼지("PM10","PM2.5")상황에 대한 풍향 비율은 비교적 서풍 계열의 바람이 높았다. 이는 우리나라 상공에서 부는 편서풍에 의해 중국과 우리나라 서해안에서 생성된 미세먼지 입자들이 이동해 고농도의 미세먼지 상황이 발생하는 것으로 보인다.
+  
+#Q3. 위 과정을 보완할 수 있는 방법을 한 가지만 제시하고, 그 근거를 서술하여라.
+  
+#A3. 고농도 미세먼지 상황을 계절별로 나누어서 본다면 더 나은 분석을 할 수 있을 것이다. 우리나라의 경우 대륙과 바다의 둘러싸여있어 여름철, 겨울철에 계절풍이 발생하는데, 계절풍은 편서풍만큼이나 미세먼지 수치에 영향을 준다. 그러므로 고농도 미세먼지 상황을 계절별로 나누어서 풍향을 확인해본다면 편서풍에 관한 요인만이 아니라 계절별로 나타나는 다른 대기 현상까지 미세먼지의 원인에 관한 결론 부분에 적용할 수 있을 것이다. 
+```
+
+### Step 3
+
+```{r}
+ #과정 1 
+date_time<-ymd_hms(new_weather2$`Measurement date`)
+Year<-year(date_time)
+Month<-month(date_time)
+Day<-mday(date_time)
+Hour<-hour(date_time)
+
+new_weather3<-new_weather2%>%
+  mutate("Year" = Year, "Month" = Month, "Day" = Day, "Hour" = Hour)
+  new_weather4<-new_weather3%>%filter(!is.na(Temper), !is.na(PM10), !is.na(PM2.5))%>% #결측치 제거
+  filter(Month == 12  | Month == 1  | Month == 2)%>%  #12월,1월,2월 자료
+  filter(Hour >= 3 & Hour <= 9) #오전 3시부터 9시까지 
+
+#과정 2
+new_weather5<-new_weather4%>%group_by(`Measurement date`)%>%
+  summarise(mean_Temper = mean(Temper), mean_PM10 = mean(PM10), mean_PM2.5 = mean(PM2.5), sd_Temper = sd(Temper), sd_PM10 = sd(PM10), sd_PM2.5 = sd(PM2.5))
+
+new_weather6<-new_weather4%>%
+  inner_join(new_weather5, by = "Measurement date")
+
+#과정 3
+ new_weather7<-
+   new_weather4%>%mutate(Temper = (new_weather6$Temper - new_weather6$mean_Temper)/new_weather6$sd_Temper,
+                       PM10 = (new_weather6$PM10 - new_weather6$mean_PM10)/new_weather6$sd_PM10,
+                       PM2.5 = (new_weather6$PM2.5 -new_weather6$mean_PM2.5)/new_weather6$sd_PM2.5) 
+ 
+#과정4
+ ggplot(new_weather7, aes(Temper, PM10)) + 
+   geom_point(color = "red")+
+   stat_smooth(method = 'lm')
+ cor(new_weather7$Temper, new_weather7$PM10) #피어슨 상관계수
+ weather.lm1<-lm(PM10~Temper,new_weather7 )
+ summary(weather.lm1)$r.squared #결정계수
+ summary(weather.lm1)$adj.r.squared #수정된 결정계수 
+ 
+ #과정5
+  ggplot(new_weather7, aes(Temper, PM2.5)) + 
+   geom_point(color = "blue")+
+   stat_smooth(method = 'lm')
+ cor(new_weather7$Temper, new_weather7$PM2.5) #피어슨 상관계수
+ weather.lm2<-lm(PM2.5~Temper,new_weather7 )
+ summary(weather.lm2)$r.squared #결정계수
+ summary(weather.lm2)$adj.r.squared #수정된 결정계수 
+ 
+ #A1. 우선 위 과정을 구현했고, PM10의 상관계수는 -0.01468064, 결정계수는 0.0002155213, 수정된 결정계수는 0.0001939872이다.  PM2.5의 상관계수는 0.01075092, 결정계수는 0.0001155823, 수정된 결정계수는 9.404606e-05이다.
+ 
+ #A2. [문제 1]의 결과, 온도와 미세먼지(PM2.5와 PM10) 농도는 거의 무시될 수 있는 상관관계를 갖는다. 또 추정한 선형 회귀 모형은 PM2.5와 PM10을 Temper에 의해 약 0.01%만 설명 가능하다고 결론지을 수 있다. 우선 데이터들을 겨울과 새벽 및 오전 자료만 추출하여 이 자료들로 비교적 열섬현상을 비교적 잘 확인할 수 있을 것이다. 이 STEP에서는  구마다 기온이 다를 수 있기에 이에 대해 미세먼지 농도를 분석해 열섬현상을 확인하고자한다. 하지만 서울특별시 내에서도 '열섬 현상'의 효과는 구마다 다르게 나타나므로 위 과정처럼 25개 구들을 시각으로 표준화하여 하나로 묶어 모델링하는 것은 적절하지 못하다. 이러한 한계점으로 인해 위 과정을 따라 분석 결과 또한 열섬현상에 대해 알려진것과 다르게 관계성을 찾을 수 없다는 결론이 도출되었을 것이다.
+ 
+ #A3(1). 시각을 기준으로 표준화한 결과는 정확한 결과 분석을 하기에는 한계가 있으므로 구를 기준으로 표준화한다면 보다 유의미한 결과를 얻을 수 있을것이다.
+ 
+ new_weatherA<-new_weather4%>%group_by(`District`)%>%
+  summarise(mean_Temper = mean(Temper), mean_PM10 = mean(PM10), mean_PM2.5 = mean(PM2.5), sd_Temper = sd(Temper), sd_PM10 = sd(PM10), sd_PM2.5 = sd(PM2.5))
+ 
+ new_weatherB<-new_weather4%>%
+  inner_join(new_weatherA, by = "District")
+ 
+ new_weatherC<-
+   new_weather4%>%mutate(Temper = (new_weatherB$Temper - new_weatherB$mean_Temper)/new_weatherB$sd_Temper,
+                       PM10 = (new_weatherB$PM10 - new_weatherB$mean_PM10)/new_weatherB$sd_PM10,
+                       PM2.5 = (new_weatherB$PM2.5 -new_weatherB$mean_PM2.5)/new_weatherB$sd_PM2.5)
+ 
+ cor(new_weatherC$Temper, new_weatherC$PM10) #피어슨 상관계수
+ weather.lm3<-lm(PM10~Temper,new_weatherC )
+ summary(weather.lm3)$r.squared #결정계수
+ summary(weather.lm3)$adj.r.squared #수정된 결정계수
+ 
+ cor(new_weatherC$Temper, new_weatherC$PM2.5) #피어슨 상관계수
+ weather.lm4<-lm(PM2.5~Temper,new_weatherC )
+ summary(weather.lm4)$r.squared #결정계수
+ summary(weather.lm4)$adj.r.squared #수정된 결정계수 
+ 
+ #A3(2).이 때의 상관계수는 PM10이 약 0.3, PM2.5가 약 0.4로 온도와 미세먼지는 뚜렷한 양의 상관관계를 갖는다. 열섬현상은 도심 상공의 기온이 높기 때문에 도심의 먼지가 상공으로 상승하여 다른 곳으로 퍼져 나가지 못하고 돔 형태로 덮는 현상이다. 즉, 이 데이터들은 비교적 도심에 관한것이며, 이론적으로 도심의 온도가 높아질수록 도심의 먼지는 멀리 퍼져나가지 못해 미세먼지의 농도가 높아진다. 이에 구를 기준으로 해 표준화하도록 보완한다면 A2.에서 언급한 한계점을 극복해 열섬현상으로 인한 도심에서 온도와 미세먼지의 관계성을 더 잘 확인할 수 있다.
+```
+

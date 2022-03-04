@@ -1,0 +1,69 @@
+---
+title: "326.212 Final Project: Part 1"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, 
+                      message = FALSE, warning = FALSE)
+```
+
+```{r packages, include = FALSE}
+library(tidyverse)
+library(dplyr)
+```
+
+## 2020-13483 Kim Dong Won
+
+## Part 1
+
+### Q1
+
+```{r}
+# 이곳에 코드를 작성하시오.
+```
+
+### Q2
+
+```{r}
+info<-read_csv("data/Measurement_info.csv")
+item_info<-read_csv("data/Measurement_item_info.csv")
+station_info<-read_csv("data/Measurement_station_info.csv")
+```
+
+### Q3
+
+```{r}
+data_info<-inner_join(info,item_info)%>%
+  inner_join(station_info)
+```
+
+### Q4
+
+```{r}
+Pollution_level<-NULL
+for ( i in seq_len(nrow(data_info))) {
+  if (data_info$`Average value`[i] <0) {
+    Pollution_level[i]<-NA
+  } else if (data_info$`Average value`[i] <= data_info$`Good(Blue)`[i]){
+    Pollution_level[i]<-"Good(Blue)"
+  } else if ( data_info$`Average value`[i] <= data_info$`Normal(Green)`[i]){
+    Pollution_level[i]<-"Normal(Green)"
+  } else if (data_info$`Average value`[i] <= data_info$`Bad(Yellow)`[i]){
+     Pollution_level[i]<-"Bad(Yellow)"
+  } else if (data_info$`Average value`[i] <= data_info$`Very bad(Red)`[i]){
+     Pollution_level[i]<-"Very bad(Red)"
+  } else if (data_info$`Average value`[i] > data_info$`Very bad(Red)`[i]){
+    Pollution_level[i]<-NA
+  }
+}
+
+data_info2<-data_info%>%
+  mutate( "Pollution level" = Pollution_level ) 
+# “Good(Blue)”, “Normal(Green)”, “Bad(Yellow)”, “Very bad(Red)” 를 범주로 가지는 변수 Pollution level 생성
+
+data_info2
+
+      
+```
+

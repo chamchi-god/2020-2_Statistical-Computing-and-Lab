@@ -1,0 +1,354 @@
+---
+title: "326.212 Final Project: Part 2"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, 
+                      message = FALSE, warning = FALSE)
+
+```
+
+```{r packages, include = FALSE}
+# 추가로 필요한 패키지가 있다면 이곳에 작성하시오.
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(corrplot)
+```
+
+## 2020-13483 Kim Dong Won
+
+## Part 2
+```{r, include = FALSE}
+info<-read_csv("data/Measurement_info.csv")
+item_info<-read_csv("data/Measurement_item_info.csv")
+station_info<-read_csv("data/Measurement_station_info.csv")
+
+data_info<-inner_join(info,item_info)%>%
+  inner_join(station_info)
+
+Pollution_level<-NULL
+for ( i in seq_len(nrow(data_info))) {
+  if (data_info$`Average value`[i] <0) {
+    Pollution_level[i]<-NA
+  } else if (data_info$`Average value`[i] <= data_info$`Good(Blue)`[i]){
+    Pollution_level[i]<-"Good(Blue)"
+  } else if ( data_info$`Average value`[i] <= data_info$`Normal(Green)`[i]){
+    Pollution_level[i]<-"Normal(Green)"
+  } else if (data_info$`Average value`[i] <= data_info$`Bad(Yellow)`[i]){
+     Pollution_level[i]<-"Bad(Yellow)"
+  } else if (data_info$`Average value`[i] <= data_info$`Very bad(Red)`[i]){
+     Pollution_level[i]<-"Very bad(Red)"
+  } else if (data_info$`Average value`[i] > data_info$`Very bad(Red)`[i]){
+    Pollution_level[i]<-NA
+  }
+}
+
+data_info2<-data_info%>%
+  mutate( "Pollution level" = Pollution_level )
+```
+
+### Q1
+
+```{r}
+data_info3<-data_info2%>%
+  select(-c("Station code" : "Item code" , "Address":"Longitude", "Unit of measurement":"Very bad(Red)")) #변수 삭제
+
+data_info3
+```
+
+### Q2
+
+```{r}
+class(data_info3$`Measurement date`)
+class(data_info3$`Average value`)
+class(data_info3$`Instrument status`)
+class(data_info3$`Item name`) #character type 변수
+class(data_info3$`Station name(district)`) #character type 변수
+class(data_info3$`Pollution level`) #character type 변수
+
+fac_ite<-as.factor(data_info3$`Item name`) #character type에서 factor type으로 변환
+fac_sta<-as.factor(data_info3$`Station name(district)`) #character type 에서 factor type으로 변환
+fac_pol<-as.factor(data_info3$`Pollution level`) #character type 에서 factor type으로 변환
+
+data_info4<-data_info3%>%
+  dplyr::select(-c("Item name" , "Station name(district)", "Pollution level"))%>% 
+  dplyr::mutate("Item name" = fac_ite, "Station name(district)" = fac_sta, "Pollution level" = fac_pol)
+#character type 변수를 factor type 변수로 변환
+
+```
+
+### Q3
+
+```{r}
+for (i in names(data_info4)) {
+  if(!is.na(data_info4[[i]])){
+    i<-i 
+    }
+}
+i 
+#3-1 각 변수마다 결측치 확인 결과 "Pollution level"에서 결측치 존재 확인
+
+#3-2 "Pollution level"은 "Average value"값이 음수가 나오거나 너무 큰 값이 나오면 NA로 설정하였다. 이는 오염물질 측정 기기의 전원이 꺼지거나 고장이 생겨 오류를 일으키거나 혹은 수리중이어서 제대로된 측정을 못한 것일 가능성이 높다. 또한 입력과정에서 문제가 생겼을 수도 있다. 즉, 매순간 정상상태에서만 오염물질의 농도를 측정할 수 있는 것은 불가능하므로 결측치가 부여되는 데이터들이 발생한 것이다.  
+
+data_info5<-data_info4%>%filter(!is.na(`Pollution level`))
+#3-3 파트1에서 NA로 부여한 데이터들은 현실에서 존재할 수 없는 음수값이거나 다른 데이터값들과 경향성을 보일 수 없을 수준의 매우 큰 값들이다. 이 데이터들은 전체 데이터 중 극소수의 아웃라이어들이기에 삭제를 하더라도 추론과정에서 큰 문제는 없어 앞으로의 논의를 위해 결측치를 지닌 행을 삭제해줄 것이다.
+
+
+
+```
+
+### Q4
+
+```{r}
+#4-1
+table(data_info5$`Instrument status`) #Instrument status에서 각 범주의 빈도 테이블
+prop.table(table(data_info5$`Instrument status`)) #Instrument status에서 각 범주의 비율 테이블
+
+#4-2
+
+#4-1의 테이블과 Instrument status변수설명을 고려하여 0이 아닌 값을 가지는 Instrument status 를 처리해줄 것이다. 우선 Need for calibration 경우에는 낮시간대에만 이 상태가 나타나는 것으로 보아 낮 시간대에 빛으로 인해 보정이 필요한 것으로 보인다. 보정방법을 정확히 모르긴 하지만 측정되는 값을 삭제하기보다는 보정된 다른 구의 동일 시각,동일 오염물질 데이터들을 평균을 내어 가져온다면 값이 보정 후와 유사해질 것이다. Abnormal 경우엔 비정상인 상태이므로 정상인 다른 구들의 동일 시각,동일 오염물질 데이터들을 평균을 내어 가져온다면 보다 나은 정확한 값을 얻을 수 있을 것이다. Power cut off 경우는 전원이 꺼진 것인데 마찬가지로 전원이 켜져있는 다른 구들의 동일 시각,동일 오염물질 데이터들을 평균을 내어 가져온다면 보다 나은 정확한 값을 얻을 수 있을 것이다. Under repair의 경우에는 긴 시간동안 데이터들이 존재하지 않은 경우가 많아 이 상태에서 측정된 값을 대체하기위해 사용할만한 그 구 내에서의 데이터가 적어 동일시각, 동일 물질의 다른 구의 데이터들을 평균내어 가져올 것이다. 즉, Instrument status의 값이 1,2,4,8일때 Instrument status가 0인 다른 구들의 동일시각, 동일 오염물질 Average value를 평균내어 새롭게 원래 Average value값에 부여해 0이 아닌 값을 가지는 Instrument status 를 처리해줄 것이다.
+ 
+a<-data_info5%>%
+  filter(`Instrument status`==1|`Instrument status`==2|`Instrument status`==4|`Instrument status`==8)
+b<-data_info5%>%
+  semi_join(a, by = c("Measurement date", "Item name"))%>%
+  filter(`Instrument status`==0)%>%
+  group_by(`Measurement date`, `Item name`)%>%
+  summarise(`Average` = mean(`Average value`))
+#b는 Instrument status가 1,2,4,8로 나타날 때, 이 때와 동일한 시각, 오염물질들이 나타나는 Instrument status가 0인 다른 구의  Average value의 평균을 구해준 것이다.
+
+c<-full_join(data_info5,b)%>%
+  filter(`Instrument status` ==0 |`Instrument status`==9)%>%dplyr::select(-`Average`)
+
+d<-full_join(data_info5,b)%>%
+  filter(`Instrument status`==1|`Instrument status`==2|`Instrument status`==4|`Instrument status`==8)%>%
+  dplyr::select(-`Average value`)%>%
+  rename(`Average value` = `Average`)
+
+data_info6<-rbind(c,d)%>%arrange(`Measurement date`)
+#동일한 시각, 오염물질들이 나타나는 Instrument status가 0인 다른 구들의 Average value의 평균을 Instrument status가 1,2,4,8에서의 Average value에 새롭게 부여하였다.
+
+data_info8<-data_info6%>%filter(`Instrument status` != 9)  #마지막으로 abnormal data의 경우에는 전체 데이터의 0.0048905052에 불과한 비정상적인 데이터 값들이므로 앞으로 경향성을 추론하는데 불필요할 것이므로 제거해줄 것이다.
+
+
+e<-data_info%>%
+  select(`Item name`,`Good(Blue)`,`Normal(Green)`,`Bad(Yellow)`,`Very bad(Red)`)%>%unique()
+
+data_info8<-data_info8%>%
+  inner_join(e) #이제 바뀐 `Average value`에 맞게 새롭게 "Pollution level"을 부여해줘야하므로 각 오염물질의 오염수준 농도 범위를 다시 데이터에 합쳐준다.
+
+Pollution_level2<-NULL
+for ( i in seq_len(nrow(data_info8))) {
+  if (data_info8$`Average value`[i] <0) {
+    Pollution_level2[i]<-NA
+  } else if (data_info8$`Average value`[i] <= data_info8$`Good(Blue)`[i]){
+    Pollution_level2[i]<-"Good(Blue)"
+  } else if ( data_info8$`Average value`[i] <= data_info8$`Normal(Green)`[i]){
+    Pollution_level2[i]<-"Normal(Green)"
+  } else if (data_info8$`Average value`[i] <= data_info8$`Bad(Yellow)`[i]){
+     Pollution_level2[i]<-"Bad(Yellow)"
+  } else if (data_info8$`Average value`[i] <= data_info8$`Very bad(Red)`[i]){
+     Pollution_level2[i]<-"Very bad(Red)"
+  } else if (data_info8$`Average value`[i] > data_info8$`Very bad(Red)`[i]){
+    Pollution_level2[i]<-NA
+  }
+}
+# 바뀐 `Average value`에 다시 새롭게 "Pollution level"을 부여해주었다.
+
+data_info9<-data_info8%>%
+  mutate( "Pollution level" = Pollution_level2 )%>%dplyr::select(-c(`Good(Blue)`,`Normal(Green)`,`Bad(Yellow)`,`Very bad(Red)`))
+# 새롭게 "Pollution level"을 부여해준 것을 기존 데이터에 합쳐주고 아까 합쳤던 각 오염물질의 오염수준 농도 범위를 다시 빼준다. 이 과정을 거쳐 0이 아닌 값을 가지는 Instrument status 를 처리해준다.
+
+
+```
+
+### Q5
+
+```{r}
+unique(data_info9$`Item name`)#`Item name`의 종류가 총 6개. 각각 "SO2","NO2","CO","O3","PM10","PM2.5"
+data_info9%>%
+  filter(`Item name` == "SO2")%>%
+  arrange(desc(`Average value`))%>%
+  head(1) #2017-03-18 05:00:00	/ Guro-gu, SO2최고치
+data_info9%>%
+  filter(`Item name` == "NO2")%>%
+  arrange(desc(`Average value`))%>%
+  head(1) #2019-02-05 23:00:00	/	Yeongdeungpo-gu, NO2최고치
+data_info9%>%
+  filter(`Item name` == "CO")%>%
+  arrange(desc(`Average value`))%>%
+  head(1) #2019-02-06 03:00:00	/ Dobong-gu, CO 최고치
+data_info9%>%
+  filter(`Item name` == "O3")%>%
+  arrange(desc(`Average value`))%>%
+  head(1) #2019-02-05 23:00:00	/ Yeongdeungpo-gu, O3 최고치
+data_info9%>%
+  filter(`Item name` == "PM10")%>%
+  arrange(desc(`Average value`))%>%
+  head(1) #2018-04-06 14:00:00	/ Seocho-gu 	, PM10 최고치
+data_info9%>%
+  filter(`Item name` == "PM2.5")%>%
+  arrange(desc(`Average value`))%>%
+  head(1) #2019-12-20 03:00:00		/	Gangdong-gu, PM2.5 최고치
+  
+```
+
+### Q6
+
+```{r}
+ggplot(data_info9) + 
+  geom_bar(aes(`Item name`, fill = `Pollution level`), position = "fill", width=0.7) +
+  labs(x = "Item name",
+       y = "proportion",
+       title = "Levels of pollution in Seoul from 2017 to 2019")
+  
+```
+
+### Q7
+
+```{r}
+head(data_info9)
+```
+
+### Q8
+
+```{r}
+data_info10<-data_info9%>%
+  filter(`Item name` == "PM2.5")%>%
+  group_by(`Station name(district)`)%>%
+  summarise(mean_avg = mean(`Average value`)) #3년간 초미세먼지(PM2.5) 평균 배출량
+  
+arrange(data_info10,desc(mean_avg))%>%
+    head(1) #3년간 초미세먼지(PM2.5) 평균 배출량이 가장 높은 구는 관악구
+  
+arrange(data_info10,mean_avg)%>%
+    head(1) #3년간 초미세먼지(PM2.5) 평균 배출량이 가장 낮은 구는 강북구
+   
+  
+  
+```
+
+### Q9
+
+```{r}
+Gwanak<-data_info9%>%filter(`Station name(district)` == "Gwanak-gu", `Item name` == "PM2.5")
+Gangbuk<-data_info9%>%filter(`Station name(district)` == "Gangbuk-gu", `Item name` == "PM2.5")
+
+t.test(Gwanak$`Average value`, Gangbuk$`Average value`, paired = F, alternative = "greater")
+ #이 문제에서 귀무가설은 관악구와 강북구 두 구 사이의 초미세먼지 평균 배출량의 차이가 없다는 것이고 대립가설은 관악구가 강북구보다 초미세먼지 평균 배출량이 많다는 것이다. 두 집단의 등분산성을 가정한 단측 t 검정결과 검정통계량은 29.452이고  p-value < 2.2e-16이므로 문제에서 주어진 유의수준 0.05보다 작기 때문에 초미세먼지 평균 배출량의 차이가 같다는 귀무가설을 기각한다. 즉, 단측 t 검정결과 두 구 사이의 초미세먼지 평균 배출량의 차이는 유의하다.
+ 
+```
+
+### Q10
+
+```{r}
+date_time<-ymd_hms(data_info9$`Measurement date`)
+Year<-year(date_time)
+Month<-month(date_time)
+Day<-mday(date_time)
+Hour<-hour(date_time) #변수 Measurement date 에서 year, month, day, hour 에 대한 정보를 추출
+data_info11<-data_info9%>%
+  mutate("Year" = Year, "Month" = Month, "Day" = Day, "Hour" = Hour) #Year, Month, Day, Hour 변수 생성
+
+```
+
+### Q11
+
+```{r}
+data_info111<-data_info11%>%
+  filter(`Item name` == "PM2.5")%>%
+  group_by(`Month`)%>%
+  summarise(mean_2.5 = mean(`Average value`)) # "PM2.5"의 월 별 평균값 변화
+
+data_info112<-data_info11%>%
+  filter(`Item name` == "PM10")%>%
+  group_by(`Month`)%>%
+  summarise(mean_10 = mean(`Average value`)) # "PM10"의 월 별 평균값 변화
+
+data_info12<-inner_join(data_info111,data_info112)
+
+ggplot(data_info12)+
+  geom_line(aes(x=Month,y=mean_2.5), color = "blue")+ 
+  geom_line(aes(x=Month,y=mean_10), color = "red")+
+  labs(title="월별 미세먼지(PM2.5, PM10) 평균값", subtitle = "파랑: PM2.5, 빨강: PM10 ",
+        x ="Month", y = "농도(Mircrogram/m3)")+
+  scale_x_continuous(breaks=seq(0, 13, 1)) 
+#미세먼지인 PM2.5와 PM10 둘다 겨울과 봄에 높은 농도를 기록하다가 여름과 가을이 되면 농도가 감소하는 경향을 보인다.
+
+
+
+  
+
+```
+
+### Q12
+
+```{r}
+#12-1
+data_info121<-data_info11%>%
+  dplyr::select(c(`Measurement date`, `Station name(district)`, `Item name`, `Average value`))%>%
+  rename( `District` = `Station name(district)`)%>%
+  spread(`Item name`,`Average value`)%>%
+  dplyr::select(-c("Measurement date","District")) 
+
+data_info121 #이 데이터프레임은 변수 Measurement date, District, Item name, Average value 만을 포함한 데이터 프레임에서 tidyr::spread() 를 이용하여 변수들이 공기 오염물질들로만 구성되도록 나머지 변수들을 제거한 데이터프레임이다.
+
+#12-2
+sum(is.na(data_info121)) #결측치 23168개 존재
+data_info122<-data_info121[complete.cases(data_info121),] #결측치가 존재하는 행 제거
+
+#12-3
+data_info122%>%
+  cor() #상관관계 행렬
+
+#12-4
+data_info122%>%
+  cor()%>%
+  corrplot() 
+# CO와 NO2, CO와 03가 음의 상관을 가지며, 나머지 오염물질들 간에는 양의 상관을 갖는다. 특히나 CO와 NO2가 뚜렷한 음의 상관관계를 갖으며, PM2.5와 PM10은 강한 양의 상관관계를 갖는다.
+
+#12-5
+data_info1241<-data_info11%>%
+  filter(`Item name` == "NO2")%>%
+  group_by(`Month`)%>%
+  summarise(mean_NO21 = mean(`Average value`)) #Month에 따라 NO2 평균값 구하기
+
+data_info1242<-data_info11%>%
+  filter(`Item name` == "O3")%>%
+  group_by(`Month`)%>%
+  summarise(mean_O31 = mean(`Average value`)) #Month에 따라 O3 평균값 구하기
+
+data_info124<-inner_join(data_info1241,data_info1242)
+
+ggplot(data_info124)+
+  geom_line(aes(x=Month,y=mean_NO21), color = "blue")+ 
+  geom_line(aes(x=Month,y=mean_O31), color = "red")+
+  labs(title="Month 에 따른 NO2 와 O3 의 변화", subtitle = "파랑: NO2, 빨강: O3",
+        x ="Month", y = "농도(ppm)")+
+  scale_x_continuous(breaks=seq(0, 13, 1)) #기존의 데이터 프레임에서 Month 에 따라 NO2 와 O3 의 변화를 나타내는 꺾은선 그래프
+
+data_info1243<-data_info11%>%
+  filter(`Item name` == "NO2")%>%
+  group_by(`Hour`)%>%
+  summarise(mean_NO22 = mean(`Average value`)) #Hour 에 따라 NO2 평균값 구하기
+
+data_info1244<-data_info11%>%
+  filter(`Item name` == "O3")%>%
+  group_by(`Hour`)%>%
+  summarise(mean_O32 = mean(`Average value`))
+
+data_info1245<-inner_join(data_info1243,data_info1244) #Hour 에 따라 O3 평균값 구하기
+
+ggplot(data_info1245)+
+  geom_line(aes(x=Hour,y=mean_NO22), color = "blue")+ 
+  geom_line(aes(x=Hour,y=mean_O32), color = "red")+
+  labs(title="HOUR 에 따른 NO2 와 O3 의 변화", subtitle = "파랑: NO2, 빨강: O3",
+        x ="HOUR", y = "농도(ppm)")+
+  scale_x_continuous(breaks=seq(0, 25, 1)) #기존의 데이터 프레임에서 Hour 에 따라 NO2 와 O3 의 변화를 나타내는 꺾은선 그래프
+
+# Month와 Hour에 따른 NO2 와 O3의 평균값 그래프를 그린 결과 NO2 와 O3의 농도는 서로 반비례하다는 관계를 알 수 있었다.
+```
+
